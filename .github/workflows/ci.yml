@@ -19,7 +19,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install package and dev dependencies
         run: python -m pip install --upgrade pip && pip install -e ".[dev]"
-      - name: Run full test suite (63 tests incl. golden DSSE vectors)
+      - name: Run full test suite (65 tests incl. golden DSSE vectors)
         run: pytest -v
       - name: Run synthetic Windows Internals demo suite
         run: python -m verimetry demo --suite internals --out ./ci-demo-internals

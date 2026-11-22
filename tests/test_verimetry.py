@@ -18,7 +18,7 @@ from verimetry.core import (
     TEST_SPECS,
 )
 from verimetry.simulate import scenario_observation, internals_observation
-from verimetry.receipts import extract_receipt, init_keys, parse_json_strict, sign, verify
+from verimetry.receipts import extract_unverified_receipt, init_keys, parse_json_strict, sign, verify
 from verimetry.oscal import export_draft
 from verimetry.report import build_report, build_inventory_report
 from verimetry import cli, windows, inventory
@@ -43,7 +43,7 @@ def test_truncation_is_not_failure():
 
 def _tamper_dsse_payload(signed: dict, mutator) -> dict:
     altered = copy.deepcopy(signed)
-    rec, _sha, _kid, _pt = extract_receipt(altered)
+    rec, _sha, _kid, _pt = extract_unverified_receipt(altered)
     mutator(rec)
     altered["payload"] = base64.b64encode(json.dumps(rec, sort_keys=True, separators=(",", ":")).encode("utf-8")).decode("ascii")
     return altered
@@ -387,7 +387,7 @@ def test_compare_tha_non_elevated_to_elevated_metrics_and_signing(tmp_path):
     assert ok, why
     assert signed_cmp["payloadType"] == DSSE_COMPARE_PAYLOAD_TYPE
 
-    rec, _sha, _kid, _pt = extract_receipt(signed_cmp)
+    rec, _sha, _kid, _pt = extract_unverified_receipt(signed_cmp)
     assert rec["verdict"] == "FAIL"
     assert_no_floats(rec)
     m = rec["observation"]["metrics"]
@@ -455,7 +455,7 @@ def test_compare_full_hardening_to_pass_and_regression_detection(tmp_path):
     ])
     pack_pass = json.loads((out_pass / "comparison-receipt.json").read_text(encoding="utf-8"))
     assert verify(pack_pass, shared_pub)[0]
-    rec_pass, _sha, _kid, _pt = extract_receipt(pack_pass)
+    rec_pass, _sha, _kid, _pt = extract_unverified_receipt(pack_pass)
     assert rec_pass["verdict"] == "PASS"
     mp = rec_pass["observation"]["metrics"]
     assert mp["before_coverage_bps"] == 2000
@@ -490,7 +490,7 @@ def test_compare_full_hardening_to_pass_and_regression_detection(tmp_path):
     ])
     pack_reg = json.loads((out_reg / "comparison-receipt.json").read_text(encoding="utf-8"))
     assert verify(pack_reg, shared_pub)[0]
-    rec_reg, _sha2, _kid2, _pt2 = extract_receipt(pack_reg)
+    rec_reg, _sha2, _kid2, _pt2 = extract_unverified_receipt(pack_reg)
     assert rec_reg["verdict"] == "FAIL"
     assert "TELEMETRY_DRIFT_DETECTED" in rec_reg["reason_codes"]
     assert "Telemetry drift / regression detected" in rec_reg["rationale"]
@@ -897,5 +897,130 @@ def test_golden_test_vectors_directory():
         ok, msg = verify((tv_dir / fname).read_text(encoding="utf-8"), pub)
         assert not ok, f"Expected {fname} to fail verification, but it passed!"
         assert expected_substr in msg, f"{fname}: expected {expected_substr!r} in {msg!r}"
+
+
+def test_piece1_review_hardening_crashes_multisig_ntfs_acl_junk_uuid_and_nonce(tmp_path, monkeypatch):
+    """Regression coverage for all Piece 1 DSSE verifier & parser review findings."""
+    import hashlib
+    from cryptography.hazmat.primitives import serialization
+    from verimetry import receipts as receipts_mod
+
+    priv = tmp_path / "p1.pem"
+    pub = init_keys(priv)
+    priv_obj = serialization.load_pem_private_key(priv.read_bytes(), password=None)
+    pub_obj = serialization.load_pem_public_key(pub.read_bytes())
+    fp = hashlib.sha256(pub_obj.public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)).hexdigest()
+
+    def _raw_dsse(raw_bytes: bytes, pt: str = DSSE_RECEIPT_PAYLOAD_TYPE) -> dict:
+        sig = priv_obj.sign(receipts_mod.dsse_pae(pt, raw_bytes))
+        return {
+            "payloadType": pt,
+            "payload": base64.b64encode(raw_bytes).decode("ascii"),
+            "signatures": [{"keyid": fp, "sig": base64.b64encode(sig).decode("ascii")}],
+        }
+
+    # 1. Crafted non-dict payloads must return (False, ...) cleanly without crashing with AttributeError
+    crafted_payloads = [
+        b"[]",
+        b'"hello"',
+        b'{"test": ["x"], "target": {}}',
+        b'{"test": {"id": "WIN-LSA-SSP-AUDIT"}, "target": ["x"]}',
+        b'{"schema": "urn:verimetry:schema:receipt:v1", "test": {"id": "WIN-LSA-SSP-AUDIT", "rule_version": "lsa-ssp-audit-v1"}, "target": {}, "observation": null, "verdict": "FAIL", "reason_codes": []}',
+        b'{"schema": "urn:verimetry:schema:receipt:v1", "test": {"id": "WIN-LSA-SSP-AUDIT", "rule_version": "lsa-ssp-audit-v1"}, "target": {}, "observation": ["x"], "verdict": "FAIL", "reason_codes": []}',
+    ]
+    for raw in crafted_payloads:
+        ok, msg = verify(_raw_dsse(raw), pub)
+        assert not ok, f"Crafted payload {raw!r} unexpectedly passed: {msg}"
+
+    # 2. DSSE multi-signature: prepended bogus sig with matching keyid must NOT DoS a valid subsequent signature
+    good_rec = make_receipt("HOST-P1", internals_observation("WIN-LSA-SSP-AUDIT", "FAIL"), "test", test_id="WIN-LSA-SSP-AUDIT")
+    signed = sign(good_rec, priv)
+    real_sig = signed["signatures"][0]
+    signed["signatures"] = [
+        {"keyid": fp, "sig": base64.b64encode(b"\x00" * 64).decode("ascii")},
+        real_sig,
+    ]
+    ok_multi, msg_multi = verify(signed, pub)
+    assert ok_multi, f"Multi-sig fallback failed: {msg_multi}"
+
+    # 3. DSSE v1 optional keyid hint (empty string "" or omitted) should still verify when sig is valid
+    signed_empty_kid = copy.deepcopy(signed)
+    signed_empty_kid["signatures"] = [{"keyid": "", "sig": real_sig["sig"]}]
+    assert verify(signed_empty_kid, pub)[0]
+
+    # 4. Empty or whitespace expected_nonce must raise ValueError loudly
+    with pytest.raises(ValueError, match="expected_nonce"):
+        verify(signed, pub, expected_nonce="")
+    with pytest.raises(ValueError, match="expected_nonce"):
+        verify(signed, pub, expected_nonce="   ")
+
+    # 5. Junk SMBIOS sentinel UUIDs must be treated as empty (prevent cross-VM fingerprint collision)
+    assert compute_host_fingerprint(None, "00000000-0000-0000-0000-000000000000") is None
+    assert compute_host_fingerprint("", "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF") is None
+    assert compute_host_fingerprint(None, "03000200-0400-0500-0006-000700080009") is None
+    fp_only_mg = compute_host_fingerprint("11111111-2222-4333-8444-555555555555", None)
+    fp_junk_smbios = compute_host_fingerprint("11111111-2222-4333-8444-555555555555", "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")
+    assert fp_only_mg == fp_junk_smbios and fp_only_mg is not None
+
+    # 6. Windows NTFS ACL hardening helper invokes locale-independent SID icacls lockdown
+    calls = []
+    def _fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if cmd[0] == "whoami":
+            return SimpleNamespace(returncode=0, stdout='"CONTOSO\\alice","S-1-5-21-100-200-300-1001"\n', stderr="")
+        return SimpleNamespace(returncode=0, stdout="processed file", stderr="")
+    monkeypatch.setattr(receipts_mod.subprocess, "run", _fake_run)
+    receipts_mod._harden_windows_private_key_acl(priv)
+    assert any(c[0] == "icacls" and "/inheritance:r" in c and "*S-1-5-21-100-200-300-1001:(R,W)" in c and "*S-1-5-18:(F)" in c for c in calls)
+
+
+def test_piece2_review_hardening_t1685_and_win32_null_guard():
+    """Regression coverage for all Piece 2 T1685 verdict gate review findings."""
+    # 1. T1685-004: missing/None firewall fields must NEVER silently PASS (mandated or unmandated)
+    for mandated in (False, True):
+        obs_missing_fw = internals_observation("WIN-T1685-004-FIREWALL-WFP", "PASS")
+        obs_missing_fw["windows_firewall_mandated"] = mandated
+        obs_missing_fw["all_firewall_profiles_enabled"] = None
+        v, codes, _ = decide_detailed(obs_missing_fw, "WIN-T1685-004-FIREWALL-WFP")
+        assert v == "INCONCLUSIVE" and "OBSERVATION_INCOMPLETE" in codes
+
+    # Active WFP drop must still hard-FAIL even if firewall profile fields are omitted
+    obs_drop_missing_fw = internals_observation("WIN-T1685-004-FIREWALL-WFP", "PASS")
+    obs_drop_missing_fw["no_unauthorized_wfp_telemetry_block"] = False
+    obs_drop_missing_fw["all_firewall_profiles_enabled"] = None
+    v, codes, _ = decide_detailed(obs_drop_missing_fw, "WIN-T1685-004-FIREWALL-WFP")
+    assert v == "FAIL" and "WFP_TELEMETRY_DROP_DETECTED" in codes
+
+    # 2. T1685-006: vtl1_running=False with omitted_default must NOT falsely emit BCD_HYPERVISOR_STAGED_OFF
+    obs_vtl_off_omitted = internals_observation("WIN-T1685-006-VBS-VTL1-BCD", "PASS")
+    obs_vtl_off_omitted["vtl1_running"] = False
+    obs_vtl_off_omitted["bcd_hypervisorlaunchtype_value"] = "omitted_default"
+    v, codes, _ = decide_detailed(obs_vtl_off_omitted, "WIN-T1685-006-VBS-VTL1-BCD")
+    assert v == "FAIL" and "VTL1_NOT_RUNNING" in codes
+    assert "BCD_HYPERVISOR_STAGED_OFF" not in codes
+
+    # 3. Stringified "false" on optional bool flags must fail closed to INCONCLUSIVE instead of bool("false") == True
+    obs_001_str = internals_observation("WIN-T1685-001-EDR-MINIFILTER", "PASS")
+    obs_001_str["strict_baseline_required"] = "false"
+    v, codes, _ = decide_detailed(obs_001_str, "WIN-T1685-001-EDR-MINIFILTER")
+    assert v == "INCONCLUSIVE" and "OBSERVATION_INCOMPLETE" in codes
+
+    obs_004_str = internals_observation("WIN-T1685-004-FIREWALL-WFP", "PASS")
+    obs_004_str["windows_firewall_mandated"] = "false"
+    v, codes, _ = decide_detailed(obs_004_str, "WIN-T1685-004-FIREWALL-WFP")
+    assert v == "INCONCLUSIVE" and "OBSERVATION_INCOMPLETE" in codes
+
+    obs_005_str = internals_observation("WIN-T1685-005-USN-EVTX", "PASS")
+    obs_005_str["usn_journal_id_changed"] = "false"
+    v, codes, _ = decide_detailed(obs_005_str, "WIN-T1685-005-USN-EVTX")
+    assert v == "INCONCLUSIVE" and "OBSERVATION_INCOMPLETE" in codes
+
+    # 4. T1685-005: lowercase "ntfs" must normalize cleanly to PASS
+    obs_005_lower = internals_observation("WIN-T1685-005-USN-EVTX", "PASS")
+    obs_005_lower["filesystem_type"] = "ntfs"
+    v, codes, _ = decide_detailed(obs_005_lower, "WIN-T1685-005-USN-EVTX")
+    assert v == "PASS" and "USN_AND_EVTX_CONTINUITY_VERIFIED" in codes
+
+
 
 

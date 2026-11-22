@@ -1,7 +1,7 @@
 """Experimental OSCAL-shaped mapping; NOT a certified/schema-validated OSCAL artifact."""
 from uuid import uuid4
 from .core import utc_now, TEST_SPECS
-from .receipts import extract_receipt
+from .receipts import extract_unverified_receipt
 
 VERIMETRY_OSCAL_NS = "urn:verimetry:ns"
 
@@ -10,7 +10,7 @@ def export_draft(packages):
     observations = []
     controls = []
     for p in packages:
-        r, payload_sha, keyid, payload_type = extract_receipt(p)
+        r, payload_sha, keyid, payload_type = extract_unverified_receipt(p)
         test = r.get("test") or {}
         test_id = test.get("id", "WIN-4688-CANARY")
         spec = TEST_SPECS.get(test_id, {})

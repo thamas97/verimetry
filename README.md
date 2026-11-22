@@ -1,6 +1,6 @@
 # Verimetry — Evidence Before Assurance
 
-![Tests](https://img.shields.io/badge/tests-63%20passing-10b981?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-65%20passing-10b981?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-38bdf8?style=flat-square)
 ![Runtime Dependencies](https://img.shields.io/badge/runtime%20deps-1%20(cryptography)-6366f1?style=flat-square)
 ![Drivers](https://img.shields.io/badge/kernel%20drivers-0-10b981?style=flat-square)
@@ -21,7 +21,7 @@ Open [`docs/sandbox.html`](./docs/sandbox.html) (or GitHub Pages) to replay real
 ### Option 2: Verify the Pre-Built DSSE v1 Sample Receipt & Golden Test Vectors Offline
 ```bash
 python3 -m pip install -e ".[dev]"
-pytest -q                                              # 63/63 tests passing (incl. test_vectors/)
+pytest -q                                              # 65/65 tests passing (incl. test_vectors/)
 python3 -m verimetry verify \
   --receipt ./docs/sample-pack/sample-comparison-receipt.json \
   --public ./docs/sample-pack/sample-signer.pub.pem \

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 from .core import TEST_SPECS, ALL_VERIMETRY_CHECK_IDS, make_receipt
-from .receipts import extract_receipt, load_json_strict, verify
+from .receipts import extract_unverified_receipt, load_json_strict, verify
 
 
 def _parse_iso(ts: str | None) -> datetime | None:
@@ -214,7 +214,7 @@ def load_and_verify_dir(
         if not ok:
             raise ValueError(f"Receipt verification failed for {fpath}: {why}")
 
-        rec, payload_sha, keyid, _pt = extract_receipt(package)
+        rec, payload_sha, keyid, _pt = extract_unverified_receipt(package)
         test_id = (rec.get("test") or {}).get("id")
         if not test_id:
             raise ValueError(f"Receipt missing test.id in {fpath}")

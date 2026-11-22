@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import re
 from . import __version__
-from .receipts import extract_receipt
+from .receipts import extract_unverified_receipt
 from .compare import bps_to_pct_str
 
 _MITRE_ID_RE = re.compile(r"\b(T\d{4}(?:\.\d{3})?)\b", re.IGNORECASE)
@@ -915,7 +915,7 @@ def build_report(packages, output, persona="both"):
     first_fp = ""
 
     for p in packages:
-        r, payload_sha, keyid, payload_type = extract_receipt(p)
+        r, payload_sha, keyid, payload_type = extract_unverified_receipt(p)
         verdict = r["verdict"]
         counts[verdict] = counts.get(verdict, 0) + 1
         target_raw = r["target"]["host"]
@@ -1339,7 +1339,7 @@ def build_inventory_report(inventory, output, persona="both"):
 def build_comparison_report(signed_package, output, persona="both"):
     """Build a static, self-contained HTML comparison report with Customer View and MSSP Operations View."""
     persona = _normalize_persona(persona)
-    receipt, payload_sha, keyid, payload_type = extract_receipt(signed_package)
+    receipt, payload_sha, keyid, payload_type = extract_unverified_receipt(signed_package)
     obs = receipt.get("observation") or {}
     metrics = obs.get("metrics") or {}
     transitions = obs.get("transitions") or []

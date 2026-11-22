@@ -156,12 +156,13 @@ def _query_audit_subcategory_win32(guid: str, label: str = "Audit subcategory"):
             if err in (5, 1314):  # ERROR_ACCESS_DENIED, ERROR_PRIVILEGE_NOT_HELD
                 return "unknown", f"{label}: AuditQuerySystemPolicy access denied (Win32 error {err}; requires Administrator)"
             return None
+        if not out_ptr:
+            return None
         try:
             mask = int(out_ptr.contents.AuditingInformation)
             return decode_audit_bitmask(mask, label=label)
         finally:
-            if out_ptr:
-                advapi32.AuditFree(out_ptr)
+            advapi32.AuditFree(out_ptr)
     except Exception:
         return None
 

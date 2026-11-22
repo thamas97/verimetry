@@ -185,10 +185,21 @@ def assert_no_floats(value, path="$"):
             assert_no_floats(item, f"{path}[{i}]")
 
 
+_JUNK_SMBIOS_UUIDS = frozenset({
+    "00000000-0000-0000-0000-000000000000",
+    "ffffffff-ffff-ffff-ffff-ffffffffffff",
+    "03000200-0400-0500-0006-000700080009",
+})
+
+
 def compute_host_fingerprint(machine_guid: str | None, smbios_uuid: str | None, tpm_ek_sha256: str | None = None) -> str | None:
     """Compute privacy-preserving host binding hash: SHA-256('verimetry-host-v1:' + MachineGuid + ':' + SMBIOS_UUID)."""
     mg = (machine_guid or "").strip().lower()
     su = (smbios_uuid or "").strip().lower()
+    if su in _JUNK_SMBIOS_UUIDS:
+        su = ""
+    if mg in _JUNK_SMBIOS_UUIDS:
+        mg = ""
     if not mg and not su:
         return None
     parts = ["verimetry-host-v1", mg, su]
@@ -374,6 +385,16 @@ def _decide_cmdline_wmi(observation):
     return _res("FAIL", codes, "Command-line / WMI telemetry gaps observed: " + "; ".join(gaps) + ".")
 
 
+def _opt_bool(observation: dict, key: str, default: bool = False) -> tuple[bool, bool]:
+    """Read an optional boolean field strictly without coercing strings like 'false' to True."""
+    val = observation.get(key)
+    if val is None:
+        return True, default
+    if isinstance(val, bool):
+        return True, val
+    return False, False
+
+
 def _decide_t1685_001_edr_minifilter(observation):
     """Hardened T1685.001 gate: supports tenant baseline OR dynamic AV/Activity-Monitor altitude band scan (320000-329999 / 360000-389999)."""
     if observation.get("scm_query_status") != "ok":
@@ -381,8 +402,14 @@ def _decide_t1685_001_edr_minifilter(observation):
     if observation.get("fltmc_query_status") != "ok":
         return _res("INCONCLUSIVE", ["FLTMC_QUERY_ACCESS_DENIED"], "Minifilter altitude enumeration (FilterFindFirst / fltmc) could not be completed (requires elevated Administrator privilege).")
 
-    baseline_specified = bool(observation.get("expected_edr_baseline"))
-    strict_pinning = bool(observation.get("strict_baseline_required", False))
+    baseline_raw = observation.get("expected_edr_baseline")
+    if baseline_raw is not None and not isinstance(baseline_raw, str):
+        return _res("INCONCLUSIVE", ["OBSERVATION_INCOMPLETE"], "Expected EDR baseline identifier must be a string or null.")
+    baseline_specified = isinstance(baseline_raw, str) and bool(baseline_raw.strip())
+
+    ok_strict, strict_pinning = _opt_bool(observation, "strict_baseline_required", False)
+    if not ok_strict:
+        return _res("INCONCLUSIVE", ["OBSERVATION_INCOMPLETE"], "strict_baseline_required must be a boolean.")
     if strict_pinning and not baseline_specified:
         return _res("INCONCLUSIVE", ["UNSPECIFIED_EDR_BASELINE"], "Strict tenant EDR baseline pinning is required, but no expected_edr_baseline was provided.")
 
@@ -550,10 +577,10 @@ def _decide_t1685_004_firewall_wfp(observation):
     tls_ok = observation.get("collector_tls_handshake_ok")
     profiles_on = observation.get("all_firewall_profiles_enabled")
     fw_log_on = observation.get("firewall_logging_enabled")
-    wf_mandated = bool(observation.get("windows_firewall_mandated", False))
+    ok_mandated, wf_mandated = _opt_bool(observation, "windows_firewall_mandated", False)
 
-    if any(not isinstance(x, bool) for x in (no_wfp_block, tls_ok)):
-        return _res("INCONCLUSIVE", ["OBSERVATION_INCOMPLETE"], "WFP telemetry filter or collector TLS handshake observation incomplete.")
+    if not ok_mandated or any(not isinstance(x, bool) for x in (no_wfp_block, tls_ok)):
+        return _res("INCONCLUSIVE", ["OBSERVATION_INCOMPLETE"], "WFP telemetry filter, collector TLS handshake, or mandate flag observation incomplete.")
 
     # Hard FAIL conditions: active outbound WFP drop targeting telemetry or broken collector TLS
     hard_gaps, hard_codes = [], []
@@ -575,6 +602,9 @@ def _decide_t1685_004_firewall_wfp(observation):
     if hard_gaps:
         return _res("FAIL", hard_codes, "Host firewall / WFP network telemetry filtering gaps observed: " + "; ".join(hard_gaps) + ".")
 
+    if not isinstance(profiles_on, bool) or not isinstance(fw_log_on, bool):
+        return _res("INCONCLUSIVE", ["OBSERVATION_INCOMPLETE"], "Windows Firewall profile or dropped-packet logging observation missing or non-boolean.")
+
     if not wf_mandated and (profiles_on is False or fw_log_on is False):
         return _res(
             "INCONCLUSIVE",
@@ -591,26 +621,30 @@ def _decide_t1685_004_firewall_wfp(observation):
 
 def _decide_t1685_005_usn_evtx(observation):
     """Hardened T1685.005 gate: tolerates healthy circular rollover, windows 1102/104 clears, and separates USN recreation from confirmed deletion."""
-    if observation.get("filesystem_type") not in (None, "NTFS"):
-        return _res("INCONCLUSIVE", ["NON_NTFS_FILESYSTEM"], f"Volume is hosted on a non-NTFS filesystem ({observation.get('filesystem_type')}) lacking standard USN Change Journal semantics.")
+    fs_type = observation.get("filesystem_type")
+    if fs_type is not None and (not isinstance(fs_type, str) or fs_type.strip().upper() != "NTFS"):
+        return _res("INCONCLUSIVE", ["NON_NTFS_FILESYSTEM"], f"Volume is hosted on a non-NTFS filesystem ({fs_type}) lacking standard USN Change Journal semantics.")
     if observation.get("usn_query_status") != "ok":
         return _res("INCONCLUSIVE", ["USN_JOURNAL_UNREADABLE"], "NTFS volume USN Change Journal metadata (FSCTL_QUERY_USN_JOURNAL) could not be queried (requires Administrator privilege or volume is read-only).")
     if observation.get("evtx_query_status") != "ok":
         return _res("INCONCLUSIVE", ["EVTX_METADATA_UNREADABLE"], "Security/Sysmon .evtx channel metadata could not be queried.")
 
-    # Support both hardened fields and legacy fields
+    # Support both hardened fields and legacy fields with strict boolean checks
     usn_active = observation.get("usn_journal_active", observation.get("usn_journal_continuity_ok"))
-    usn_bounds = observation.get("usn_bounds_valid", True)
-    usn_id_changed = bool(observation.get("usn_journal_id_changed", False))
-    usn_explicit_delete = bool(observation.get("usn_explicit_delete_indicator", False))
+    ok_bounds, usn_bounds = _opt_bool(observation, "usn_bounds_valid", True)
+    ok_id_chg, usn_id_changed = _opt_bool(observation, "usn_journal_id_changed", False)
+    ok_del, usn_explicit_delete = _opt_bool(observation, "usn_explicit_delete_indicator", False)
 
     evtx_monotonic = observation.get("evtx_in_range_monotonic", observation.get("evtx_sequence_monotonic"))
-    evtx_reset_1 = bool(observation.get("evtx_next_record_reset_to_1", False))
+    ok_reset, evtx_reset_1 = _opt_bool(observation, "evtx_next_record_reset_to_1", False)
     clear_in_window = observation.get("log_clear_1102_104_in_window")
     if clear_in_window is None and isinstance(observation.get("no_log_clear_event_1102_104"), bool):
         clear_in_window = not observation["no_log_clear_event_1102_104"]
 
-    if any(not isinstance(x, bool) for x in (usn_active, usn_bounds, evtx_monotonic, clear_in_window)):
+    if (
+        not all((ok_bounds, ok_id_chg, ok_del, ok_reset))
+        or any(not isinstance(x, bool) for x in (usn_active, evtx_monotonic, clear_in_window))
+    ):
         return _res("INCONCLUSIVE", ["OBSERVATION_INCOMPLETE"], "USN Change Journal or .evtx sequence continuity observation incomplete.")
 
     gaps, codes = [], []
@@ -645,7 +679,7 @@ def _decide_t1685_005_usn_evtx(observation):
 
 
 def _decide_t1685_006_vbs_vtl1_bcd(observation):
-    """Hardened T1685.006 gate: handles non-UEFI/Gen1 VMs as INCONCLUSIVE and treats omitted hypervisorlaunchtype as OS default when VTL 1 runs."""
+    """Hardened T1685.006 gate: handles non-UEFI/Gen1 VMs as INCONCLUSIVE and only emits BCD_HYPERVISOR_STAGED_OFF when explicitly 'off'."""
     if observation.get("virtualization_environment") == "nested_vm_no_vtx":
         return _res("INCONCLUSIVE", ["NESTED_VM_NO_VTX"], "Running inside a nested VM without exposed hardware virtualization extensions (VT-x/AMD-V).")
     if observation.get("firmware_type") == "BIOS" or observation.get("secure_boot_status") == "not_supported":
@@ -667,14 +701,11 @@ def _decide_t1685_006_vbs_vtl1_bcd(observation):
     if any(not isinstance(x, bool) for x in (vtl1_active, reg_matches_live, secure_boot_on)) or bcd_val not in ("auto", "omitted_default", "off"):
         return _res("INCONCLUSIVE", ["OBSERVATION_INCOMPLETE"], "VTL 1 runtime or staged BCD/registry comparison observation incomplete.")
 
-    # Omitted hypervisorlaunchtype is valid OS default when VTL 1 is actively running; explicit 'off' is reboot-downgrade drift
-    bcd_ok = (bcd_val == "auto") or (bcd_val == "omitted_default" and vtl1_active)
-
     gaps, codes = [], []
     if not vtl1_active:
         gaps.append("VTL 1 (Virtualization-Based Security / HVCI) is not actively running")
         codes.append("VTL1_NOT_RUNNING")
-    if not bcd_ok:
+    if bcd_val == "off":
         gaps.append("staged BCD hypervisorlaunchtype is explicitly set to Off (pending VTL 1 downgrade on next reboot)")
         codes.append("BCD_HYPERVISOR_STAGED_OFF")
     if not reg_matches_live:
@@ -839,6 +870,12 @@ def validate_receipt(receipt):
     test = receipt.get("test")
     if not isinstance(test, dict):
         return False, "MISSING_TEST_METADATA: Missing test metadata"
+    target = receipt.get("target")
+    if not isinstance(target, dict):
+        return False, "MISSING_TARGET_METADATA: Missing or invalid target metadata"
+    observation = receipt.get("observation")
+    if not isinstance(observation, dict):
+        return False, "INVALID_OBSERVATION: Missing or non-object observation payload"
     test_id = test.get("id")
     spec = TEST_SPECS.get(test_id)
     if spec is None:
@@ -848,7 +885,7 @@ def validate_receipt(receipt):
     stored_codes = receipt.get("reason_codes")
     if not isinstance(stored_codes, list) or not all(isinstance(c, str) for c in stored_codes):
         return False, "INVALID_REASON_CODES: Missing or invalid reason_codes list"
-    v, expected_codes, _r = decide_detailed(receipt.get("observation", {}), test_id=test_id)
+    v, expected_codes, _r = decide_detailed(observation, test_id=test_id)
     if v != receipt.get("verdict") or sorted(stored_codes) != expected_codes:
         return False, "VERDICT_MISMATCH: Stored verdict or reason_codes do not agree with observations"
     return True, "Recomputed verdict and reason_codes match"

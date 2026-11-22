@@ -11,7 +11,7 @@ from .core import (
     WINDOWS_INTERNALS_CHECK_IDS,
     T1685_ASSURANCE_CHECK_IDS,
 )
-from .receipts import extract_receipt, init_keys, load_json_strict, sign, verify
+from .receipts import extract_unverified_receipt, init_keys, load_json_strict, sign, verify
 from .simulate import scenario_observation, internals_observation
 from .report import build_report, build_inventory_report, build_comparison_report
 from .oscal import export_draft
@@ -293,7 +293,7 @@ def main(argv=None):
         if not ok:
             raise SystemExit(2)
         if args.show:
-            rec, _sha, _kid, _pt = extract_receipt(package)
+            rec, _sha, _kid, _pt = extract_unverified_receipt(package)
             print(json.dumps(rec, indent=2, ensure_ascii=False))
 
 
