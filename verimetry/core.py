@@ -729,26 +729,35 @@ def _decide_t1685_006_vbs_vtl1_bcd(observation):
 
 
 def _decide_t1685_007_safeboot_bcd(observation):
-    """Hardened T1685.007 gate: checks active EDR SafeBoot registrations instead of hardcoding Defender."""
+    """Hardened T1685.007 gate: checks active EDR SafeBoot registrations dynamically and hard-fails staged BCD SafeBoot."""
     if observation.get("bcd_query_status") in ("bitlocker_locked", "access_denied", "query_error"):
         return _res("INCONCLUSIVE", ["BCD_STORE_UNREADABLE"], "BitLocker recovery state, locked system hive, or insufficient privileges prevented reading the active BCD {current} store.")
-    if observation.get("bcd_query_status") != "ok" or observation.get("safeboot_reg_status") != "ok":
-        return _res("INCONCLUSIVE", ["SAFEBOOT_STATE_UNREADABLE"], "Active BCD {current} store or SafeBoot registry hive could not be inspected.")
+    if observation.get("bcd_query_status") != "ok":
+        return _res("INCONCLUSIVE", ["SAFEBOOT_STATE_UNREADABLE"], "Active BCD {current} store could not be inspected.")
     no_staged_safeboot = observation.get("bcd_safeboot_absent")
+    if not isinstance(no_staged_safeboot, bool):
+        return _res("INCONCLUSIVE", ["OBSERVATION_INCOMPLETE"], "BCD SafeBoot flag observation incomplete.")
+
+    safeboot_reg_ok_status = observation.get("safeboot_reg_status") == "ok"
     edr_safeboot_reg_ok = observation.get("active_edr_safeboot_keys_intact", observation.get("edr_safeboot_keys_intact"))
-    flags = (no_staged_safeboot, edr_safeboot_reg_ok)
-    if any(not isinstance(x, bool) for x in flags):
-        return _res("INCONCLUSIVE", ["OBSERVATION_INCOMPLETE"], "BCD SafeBoot flag or SafeBoot registry key observation incomplete.")
-    if all(flags):
-        return _res("PASS", ["BCD_SAFEBOOT_CLEAR", "ACTIVE_EDR_SAFEBOOT_KEYS_INTACT"], "No safeboot flag (0x25000080) is staged in BCD {current}, and active security service keys remain properly registered under HKLM\\SYSTEM\\CurrentControlSet\\Control\\SafeBoot.")
+
     gaps, codes = [], []
     if not no_staged_safeboot:
         gaps.append("staged safeboot flag (minimal/network) detected in BCD {current} while running in normal mode (imminent Safe Mode evasion reboot)")
         codes.append("BCD_SAFEBOOT_STAGED")
-    if not edr_safeboot_reg_ok:
+    if safeboot_reg_ok_status and edr_safeboot_reg_ok is False:
         gaps.append("active EDR/security service keys missing or tampered under HKLM\\SYSTEM\\CurrentControlSet\\Control\\SafeBoot")
         codes.append("ACTIVE_EDR_SAFEBOOT_KEYS_MISSING")
-    return _res("FAIL", codes, "Safe Mode / Recovery boot tampering gaps observed: " + "; ".join(gaps) + ".")
+
+    if gaps:
+        return _res("FAIL", codes, "Safe Mode / Recovery boot tampering gaps observed: " + "; ".join(gaps) + ".")
+
+    if not safeboot_reg_ok_status:
+        return _res("INCONCLUSIVE", ["SAFEBOOT_STATE_UNREADABLE"], "BCD {current} has no staged SafeBoot flag, but the SafeBoot registry hive could not be inspected.")
+    if not isinstance(edr_safeboot_reg_ok, bool):
+        return _res("INCONCLUSIVE", ["OBSERVATION_INCOMPLETE"], "BCD {current} has no staged SafeBoot flag, but no active security/EDR baseline service was discovered to verify SafeBoot registration.")
+
+    return _res("PASS", ["BCD_SAFEBOOT_CLEAR", "ACTIVE_EDR_SAFEBOOT_KEYS_INTACT"], "No safeboot flag (0x25000080) is staged in BCD {current}, and active security service keys remain properly registered under HKLM\\SYSTEM\\CurrentControlSet\\Control\\SafeBoot.")
 
 
 def _decide_assurance_compare(observation):

@@ -1022,5 +1022,179 @@ def test_piece2_review_hardening_t1685_and_win32_null_guard():
     assert v == "PASS" and "USN_AND_EVTX_CONTINUITY_VERIFIED" in codes
 
 
+def test_live_t1685_006_vbs_vtl1_bcd_collector_scenarios(monkeypatch):
+    """Test live T1685-006 collector across healthy UEFI, omitted BCD default, staged Off drift, registry drift, legacy BIOS, nested VM & non-admin."""
+    monkeypatch.setattr(windows, "_require_windows", lambda: None)
+
+    base_ps = {
+        "device_guard_status": "ok",
+        "vbs_status": 2,
+        "security_services_running": [1, 2],
+        "available_security_properties": [1, 2, 3],
+        "hypervisor_present": True,
+        "model": "ThinkPad X1",
+        "manufacturer": "LENOVO",
+        "firmware_type": "UEFI",
+        "secure_boot_status": "ok",
+        "uefi_secure_boot_enabled": True,
+        "reg_enable_vbs": 1,
+        "reg_hvci_enabled": 1,
+    }
+
+    # 1. Healthy UEFI + VTL 1 + WMI hypervisor_int=1 ("auto") -> PASS
+    def _mock_call(ps_override=None, bcd_res=None):
+        ps_data = dict(base_ps)
+        if ps_override:
+            ps_data.update(ps_override)
+        bcd_data = bcd_res or {"bcd_query_status": "ok", "source": "wmi-bcdstore", "hypervisor_int": 1, "safeboot_int": None}
+
+        def _fake_ps(script, timeout=25):
+            if "BcdStore" in script:
+                return bcd_data, "ok"
+            return ps_data, "ok"
+
+        monkeypatch.setattr(windows, "_run_ps_json", _fake_ps)
+        obs = windows.run_t1685_006_vbs_vtl1_bcd()
+        assert_no_floats(obs)
+        return obs, decide_detailed(obs, "WIN-T1685-006-VBS-VTL1-BCD")
+
+    obs, (v, codes, _) = _mock_call()
+    assert v == "PASS" and "VTL1_AND_BCD_INTEGRITY_VERIFIED" in codes
+    assert obs["evidence"]["bcd_source"] == "wmi-bcdstore"
+
+    # 2. Healthy UEFI + VTL 1 + omitted BCD hypervisorlaunchtype (None) -> PASS with BCD_HYPERVISOR_OS_DEFAULT
+    obs, (v, codes, _) = _mock_call(bcd_res={"bcd_query_status": "ok", "source": "wmi-bcdstore", "hypervisor_int": None, "safeboot_int": None})
+    assert v == "PASS" and "BCD_HYPERVISOR_OS_DEFAULT" in codes
+
+    # 3. Staged BCD hypervisorlaunchtype=0 ("off") while VTL 1 still running -> FAIL (BCD_HYPERVISOR_STAGED_OFF)
+    obs, (v, codes, _) = _mock_call(bcd_res={"bcd_query_status": "ok", "source": "wmi-bcdstore", "hypervisor_int": 0, "safeboot_int": None})
+    assert v == "FAIL" and "BCD_HYPERVISOR_STAGED_OFF" in codes
+
+    # 4. Staged DeviceGuard registry reboot-downgrade drift (EnableVirtualizationBasedSecurity=0) -> FAIL
+    obs, (v, codes, _) = _mock_call(ps_override={"reg_enable_vbs": 0})
+    assert v == "FAIL" and "DEVICE_GUARD_REGISTRY_REBOOT_DRIFT" in codes
+
+    # 5. Legacy BIOS / Gen1 Cloud VM -> INCONCLUSIVE (FIRMWARE_NOT_UEFI)
+    obs, (v, codes, _) = _mock_call(ps_override={"firmware_type": "BIOS", "secure_boot_status": "not_supported", "uefi_secure_boot_enabled": None})
+    assert v == "INCONCLUSIVE" and "FIRMWARE_NOT_UEFI" in codes
+
+    # 6. Nested VM without VT-x exposed -> INCONCLUSIVE (NESTED_VM_NO_VTX)
+    obs, (v, codes, _) = _mock_call(ps_override={"manufacturer": "VMware, Inc.", "model": "VMware Virtual Platform", "hypervisor_present": False, "available_security_properties": [], "vbs_status": 0})
+    assert v == "INCONCLUSIVE" and "NESTED_VM_NO_VTX" in codes
+
+    # 7. Non-elevated BCD access denied -> INCONCLUSIVE (BCD_STORE_UNREADABLE)
+    obs, (v, codes, _) = _mock_call(bcd_res={"bcd_query_status": "access_denied", "error": "Access is denied"})
+    assert v == "INCONCLUSIVE" and "BCD_STORE_UNREADABLE" in codes
+
+
+def test_live_t1685_007_safeboot_bcd_collector_scenarios(monkeypatch):
+    """Test live T1685-007 collector across third-party EDR SafeBoot, staged SafeBoot hard-fail, missing EDR SafeBoot key & non-admin."""
+    monkeypatch.setattr(windows, "_require_windows", lambda: None)
+
+    def _run_case(bcd_res, sb_ps):
+        def _fake_ps(script, timeout=25):
+            if "BcdStore" in script:
+                return bcd_res, "ok"
+            return sb_ps, "ok"
+
+        monkeypatch.setattr(windows, "_run_ps_json", _fake_ps)
+        obs = windows.run_t1685_007_safeboot_bcd()
+        assert_no_floats(obs)
+        return obs, decide_detailed(obs, "WIN-T1685-007-SAFEBOOT-BCD")
+
+    clean_bcd = {"bcd_query_status": "ok", "source": "wmi-bcdstore", "hypervisor_int": 1, "safeboot_int": None}
+    staged_bcd = {"bcd_query_status": "ok", "source": "wmi-bcdstore", "hypervisor_int": 1, "safeboot_int": 0}
+
+    # 1. Third-party CrowdStrike EDR (no Defender) registered in SafeBoot + clean BCD -> PASS
+    obs, (v, codes, _) = _run_case(clean_bcd, {
+        "safeboot_reg_status": "ok",
+        "minimal_key_count": 42,
+        "network_key_count": 64,
+        "minimal_keys": ["CSFalconService", "EventLog"],
+        "network_keys": ["CSFalconService", "Dnscache"],
+        "discovered_security_services": ["CSFalconService"],
+    })
+    assert v == "PASS" and "BCD_SAFEBOOT_CLEAR" in codes and "ACTIVE_EDR_SAFEBOOT_KEYS_INTACT" in codes
+    assert obs["evidence"]["matched_safeboot_keys"] == ["CSFalconService"]
+
+    # 2. Staged SafeBoot Minimal (0x25000080 = 0) -> hard FAIL even when no security service discovered
+    obs, (v, codes, _) = _run_case(staged_bcd, {
+        "safeboot_reg_status": "ok",
+        "minimal_key_count": 10,
+        "network_key_count": 10,
+        "minimal_keys": ["EventLog"],
+        "network_keys": ["EventLog"],
+        "discovered_security_services": [],
+    })
+    assert v == "FAIL" and "BCD_SAFEBOOT_STAGED" in codes
+    assert obs["evidence"]["staged_safeboot_mode"] == "Minimal"
+
+    # 3. Clean BCD + running SentinelAgent missing from SafeBoot keys -> FAIL (ACTIVE_EDR_SAFEBOOT_KEYS_MISSING)
+    obs, (v, codes, _) = _run_case(clean_bcd, {
+        "safeboot_reg_status": "ok",
+        "minimal_key_count": 10,
+        "network_key_count": 10,
+        "minimal_keys": ["EventLog"],
+        "network_keys": ["Dnscache"],
+        "discovered_security_services": ["SentinelAgent"],
+    })
+    assert v == "FAIL" and "ACTIVE_EDR_SAFEBOOT_KEYS_MISSING" in codes
+
+    # 4. Clean BCD + no discoverable security service -> honest INCONCLUSIVE (never false FAIL)
+    obs, (v, codes, _) = _run_case(clean_bcd, {
+        "safeboot_reg_status": "ok",
+        "minimal_key_count": 10,
+        "network_key_count": 10,
+        "minimal_keys": ["EventLog"],
+        "network_keys": ["Dnscache"],
+        "discovered_security_services": [],
+    })
+    assert v == "INCONCLUSIVE" and "OBSERVATION_INCOMPLETE" in codes
+
+    # 5. Non-elevated BCD access denied -> INCONCLUSIVE (BCD_STORE_UNREADABLE)
+    obs, (v, codes, _) = _run_case({"bcd_query_status": "access_denied", "error": "Access is denied"}, {
+        "safeboot_reg_status": "ok",
+        "minimal_key_count": 10,
+        "network_key_count": 10,
+        "minimal_keys": ["WinDefend"],
+        "network_keys": ["WinDefend"],
+        "discovered_security_services": ["WinDefend"],
+    })
+    assert v == "INCONCLUSIVE" and "BCD_STORE_UNREADABLE" in codes
+
+
+def test_bcdedit_fallback_parser_and_cli_assess_t1685_bcd_suite(tmp_path, monkeypatch):
+    """Verify bcdedit /enum {current} fallback parser (incl. localized German 'Aus') and CLI `assess --suite t1685-bcd`."""
+    de_bcd = (
+        "Windows-Startladeprogramm\n"
+        "-------------------------\n"
+        "Bezeichner              {current}\n"
+        "hypervisorlaunchtype    Aus\n"
+        "safeboot                Minimal\n"
+    )
+    parsed = windows._parse_bcdedit_current(de_bcd)
+    assert parsed["bcd_query_status"] == "ok"
+    assert parsed["hypervisorlaunchtype_value"] == "off"
+    assert parsed["safeboot_staged"] is True
+    assert parsed["staged_safeboot_mode"] == "Minimal"
+
+    # End-to-end CLI `assess --suite t1685-bcd` produces valid DSSE receipts verifiable offline
+    monkeypatch.setattr(windows, "_require_windows", lambda: None)
+    monkeypatch.setattr(cli, "collect", lambda: {"kind": "mock-inv", "status": "observed", "collected_at": "2026-11-22T00:00:00+00:00", "sections": {}})
+    monkeypatch.setattr(windows, "collect_host_fingerprint", lambda: compute_host_fingerprint("11111111-2222-4333-8444-555555555555", None))
+    monkeypatch.setattr(windows, "run_t1685_006_vbs_vtl1_bcd", lambda: internals_observation("WIN-T1685-006-VBS-VTL1-BCD", "PASS"))
+    monkeypatch.setattr(windows, "run_t1685_007_safeboot_bcd", lambda: internals_observation("WIN-T1685-007-SAFEBOOT-BCD", "PASS"))
+
+    out_dir = tmp_path / "live-bcd"
+    cli.main(["assess", "--suite", "t1685-bcd", "--out", str(out_dir), "--nonce", "live-bcd-nonce-1"])
+    pub = out_dir / "signer.pub.pem"
+    for slug in ("t1685-006-vbs-vtl1-bcd", "t1685-007-safeboot-bcd"):
+        rpath = out_dir / f"receipt-{slug}.json"
+        assert rpath.exists()
+        ok, msg = verify(rpath.read_text(encoding="utf-8"), pub, expected_nonce="live-bcd-nonce-1")
+        assert ok, msg
+
+
+
 
 

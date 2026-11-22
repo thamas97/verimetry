@@ -973,22 +973,421 @@ try {
     }
 
 
-def run_all_internals_checks(window_seconds=4, selected=None):
-    """Execute all 5 safe Windows Internals checks (or a selected subset) and return (slug, test_id, observation)."""
+BCD_CURRENT_GUID = "{fa926493-6f1c-4193-a414-58f0b2456d1e}"
+BCD_ELEM_SAFEBOOT = 0x25000080
+BCD_ELEM_HYPERVISOR_LAUNCH_TYPE = 0x250000F0
+_SAFEBOOT_MODE_MAP = {0: "Minimal", 1: "Network", 2: "DsRepair"}
+_HYPERVISOR_MODE_MAP = {0: "off", 1: "auto"}
+_VM_MODEL_TOKENS = ("virtual machine", "vmware", "virtualbox", "qemu", "kvm", "bochs", "standard pc", "xen")
+
+
+def _parse_bcdedit_current(stdout: str) -> dict:
+    """Fallback parser for `bcdedit /enum {current}` when WMI root\\wmi:BcdStore is unavailable."""
+    hyp_val = "omitted_default"
+    safeboot_mode = None
+    for raw_line in (stdout or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        parts = line.split(None, 1)
+        if len(parts) != 2:
+            continue
+        key, val = parts[0].strip().lower(), parts[1].strip()
+        val_l = val.lower()
+        if key == "hypervisorlaunchtype":
+            if val_l in ("off", "0", "aus", "desactive", "désactivé", "disabled"):
+                hyp_val = "off"
+            elif val_l in ("auto", "1", "automatisch", "automatique"):
+                hyp_val = "auto"
+            else:
+                hyp_val = "unknown"
+        elif key == "safeboot":
+            safeboot_mode = val
+    return {
+        "bcd_query_status": "ok",
+        "source": "bcdedit-fallback",
+        "hypervisorlaunchtype_value": hyp_val,
+        "safeboot_staged": safeboot_mode is not None,
+        "staged_safeboot_mode": safeboot_mode,
+    }
+
+
+def _read_bcd_current_elements() -> dict:
+    """Read BCD {current} HypervisorLaunchType (0x250000F0) & SafeBoot (0x25000080) via locale-independent WMI BcdStore with bcdedit fallback."""
+    script = rf'''
+$ErrorActionPreference='Stop'
+try {{
+  $storeClass = [wmiclass]"root\wmi:BcdStore"
+  $open = $storeClass.OpenStore("")
+  if (-not $open.ReturnValue -or -not $open.Store) {{
+    @{{bcd_query_status='access_denied';error='OpenStore failed'}} | ConvertTo-Json -Compress
+    exit 0
+  }}
+  $objRes = $open.Store.OpenObject("{BCD_CURRENT_GUID}")
+  if (-not $objRes.ReturnValue -or -not $objRes.Object) {{
+    @{{bcd_query_status='query_error';error='OpenObject current failed'}} | ConvertTo-Json -Compress
+    exit 0
+  }}
+  $obj = $objRes.Object
+  $hypRaw = $null
+  try {{
+    $el = $obj.GetElement({BCD_ELEM_HYPERVISOR_LAUNCH_TYPE})
+    if ($el.ReturnValue -and $null -ne $el.Element -and $null -ne $el.Element.Integer) {{
+      $hypRaw = [int]$el.Element.Integer
+    }}
+  }} catch {{}}
+  $sbRaw = $null
+  try {{
+    $el2 = $obj.GetElement({BCD_ELEM_SAFEBOOT})
+    if ($el2.ReturnValue -and $null -ne $el2.Element -and $null -ne $el2.Element.Integer) {{
+      $sbRaw = [int]$el2.Element.Integer
+    }}
+  }} catch {{}}
+  @{{
+    bcd_query_status='ok'
+    source='wmi-bcdstore'
+    hypervisor_int=$hypRaw
+    safeboot_int=$sbRaw
+  }} | ConvertTo-Json -Compress
+}} catch {{
+  $msg = $_.Exception.Message
+  if ($msg -match 'Access is denied|0x80070005|0x80041003|Privilege') {{
+    @{{bcd_query_status='access_denied';error=$msg}} | ConvertTo-Json -Compress
+  }} elseif ($msg -match 'BitLocker|locked') {{
+    @{{bcd_query_status='bitlocker_locked';error=$msg}} | ConvertTo-Json -Compress
+  }} else {{
+    @{{bcd_query_status='wmi_unavailable';error=$msg}} | ConvertTo-Json -Compress
+  }}
+}}
+'''
+    parsed, status = _run_ps_json(script, timeout=20)
+    if status == "ok" and isinstance(parsed, dict):
+        bstatus = parsed.get("bcd_query_status")
+        if bstatus == "ok":
+            hyp_int = parsed.get("hypervisor_int")
+            sb_int = parsed.get("safeboot_int")
+            if hyp_int is None:
+                hyp_val = "omitted_default"
+            elif isinstance(hyp_int, int) and not isinstance(hyp_int, bool) and hyp_int in _HYPERVISOR_MODE_MAP:
+                hyp_val = _HYPERVISOR_MODE_MAP[hyp_int]
+            else:
+                hyp_val = "unknown"
+            sb_staged = sb_int is not None
+            sb_mode = (
+                _SAFEBOOT_MODE_MAP.get(sb_int, str(sb_int))
+                if (isinstance(sb_int, int) and not isinstance(sb_int, bool))
+                else (str(sb_int) if sb_staged else None)
+            )
+            return {
+                "bcd_query_status": "ok",
+                "source": "wmi-bcdstore",
+                "hypervisorlaunchtype_value": hyp_val,
+                "safeboot_staged": sb_staged,
+                "staged_safeboot_mode": sb_mode,
+            }
+        if bstatus in ("access_denied", "bitlocker_locked"):
+            return {"bcd_query_status": bstatus, "source": "wmi-bcdstore", "error": parsed.get("error")}
+
+    # Fallback: read-only bcdedit /enum {current}
+    try:
+        r = _run(["bcdedit.exe", "/enum", "{current}"], timeout=15)
+        combined = f"{r.stdout}\n{r.stderr}".lower()
+        if r.returncode != 0:
+            if any(tok in combined for tok in ("access is denied", "zugriff verweigert", "accès refusé", "0x80070005", "administrator")):
+                return {"bcd_query_status": "access_denied", "source": "bcdedit-fallback"}
+            if "bitlocker" in combined or "locked" in combined:
+                return {"bcd_query_status": "bitlocker_locked", "source": "bcdedit-fallback"}
+            return {"bcd_query_status": "query_error", "source": "bcdedit-fallback"}
+        return _parse_bcdedit_current(r.stdout)
+    except Exception:
+        return {"bcd_query_status": "query_error", "source": "bcdedit-fallback"}
+
+
+def run_t1685_006_vbs_vtl1_bcd():
+    """Live T1685.006 collector: compare live Win32_DeviceGuard VTL 1 state against staged BCD hypervisorlaunchtype, DeviceGuard registry keys & UEFI Secure Boot."""
+    _require_windows()
+    start = datetime.now(timezone.utc)
+    script = r'''
+$ErrorActionPreference='SilentlyContinue'
+$dgStatus = 'ok'
+$dg = $null
+try {
+  $dg = Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\Microsoft\Windows\DeviceGuard -ErrorAction Stop | Select-Object -First 1
+} catch {
+  $dgStatus = if ($_.Exception.Message -match 'Access is denied|0x80070005') { 'access_denied' } else { 'query_error' }
+}
+$cs = $null
+try { $cs = Get-CimInstance -ClassName Win32_ComputerSystem -ErrorAction Stop | Select-Object -First 1 } catch {}
+
+$fwType = 'UEFI'
+$sbStatus = 'ok'
+$sbEnabled = $null
+try {
+  $sbEnabled = [bool](Confirm-SecureBootUEFI -ErrorAction Stop)
+} catch [System.PlatformNotSupportedException] {
+  $fwType = 'BIOS'
+  $sbStatus = 'not_supported'
+} catch {
+  $m = $_.Exception.Message
+  if ($m -match 'not supported on this platform|ERROR_INVALID_FUNCTION|BIOS') {
+    $fwType = 'BIOS'
+    $sbStatus = 'not_supported'
+  } elseif ($m -match 'Unauthorized|Access is denied|Administrator|Privilege|0x80070005|0xC0000022') {
+    $sbStatus = 'access_denied'
+  } else {
+    $sbStatus = 'query_error'
+  }
+}
+
+$dgRegVal = $null
+$hvciRegVal = $null
+try {
+  $k1 = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard' -Name EnableVirtualizationBasedSecurity -ErrorAction Stop
+  $dgRegVal = [int]$k1.EnableVirtualizationBasedSecurity
+} catch {}
+try {
+  $k2 = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity' -Name Enabled -ErrorAction Stop
+  $hvciRegVal = [int]$k2.Enabled
+} catch {}
+
+@{
+  device_guard_status = $dgStatus
+  vbs_status = if ($null -ne $dg) { [int]$dg.VirtualizationBasedSecurityStatus } else { $null }
+  security_services_running = if ($null -ne $dg -and $null -ne $dg.SecurityServicesRunning) { @($dg.SecurityServicesRunning) } else { @() }
+  available_security_properties = if ($null -ne $dg -and $null -ne $dg.AvailableSecurityProperties) { @($dg.AvailableSecurityProperties) } else { @() }
+  hypervisor_present = if ($null -ne $cs -and $null -ne $cs.HypervisorPresent) { [bool]$cs.HypervisorPresent } else { $null }
+  model = if ($null -ne $cs) { [string]$cs.Model } else { '' }
+  manufacturer = if ($null -ne $cs) { [string]$cs.Manufacturer } else { '' }
+  firmware_type = $fwType
+  secure_boot_status = $sbStatus
+  uefi_secure_boot_enabled = $sbEnabled
+  reg_enable_vbs = $dgRegVal
+  reg_hvci_enabled = $hvciRegVal
+} | ConvertTo-Json -Compress
+'''
+    parsed, ps_status = _run_ps_json(script, timeout=25)
+    bcd = _read_bcd_current_elements()
+    end = datetime.now(timezone.utc)
+
+    if ps_status != "ok" or not isinstance(parsed, dict):
+        return {
+            "mode": "live-windows",
+            "start_time": start.isoformat(),
+            "end_time": end.isoformat(),
+            "virtualization_environment": "unknown",
+            "firmware_type": "unknown",
+            "secure_boot_status": "query_error",
+            "device_guard_status": ps_status,
+            "bcd_query_status": bcd.get("bcd_query_status", "query_error"),
+            "vtl1_running": None,
+            "bcd_hypervisorlaunchtype_value": None,
+            "registry_matches_running_vtl1_state": None,
+            "uefi_secure_boot_enabled": None,
+            "scope_note": "Live read-only T1685.006 check failed to query Win32_DeviceGuard / UEFI Secure Boot.",
+        }
+
+    avail_props = _as_int_list(parsed.get("available_security_properties"))
+    running_svcs = _as_int_list(parsed.get("security_services_running"))
+    vbs_status = parsed.get("vbs_status")
+    model_str = f"{parsed.get('manufacturer', '')} {parsed.get('model', '')}".lower()
+    is_virtual_hw = any(tok in model_str for tok in _VM_MODEL_TOKENS)
+    hyp_present = parsed.get("hypervisor_present")
+
+    virt_env = "bare_metal_or_nested_vtx"
+    if is_virtual_hw and hyp_present is False and (1 not in avail_props):
+        virt_env = "nested_vm_no_vtx"
+
+    dg_status = parsed.get("device_guard_status", "query_error")
+    vtl1_running = (vbs_status == 2) if dg_status == "ok" and isinstance(vbs_status, int) and not isinstance(vbs_status, bool) else None
+    hvci_running = (2 in running_svcs) if dg_status == "ok" else False
+
+    reg_enable_vbs = parsed.get("reg_enable_vbs")
+    reg_hvci_enabled = parsed.get("reg_hvci_enabled")
+    reg_matches = None
+    if isinstance(vtl1_running, bool):
+        vbs_drift = vtl1_running and (reg_enable_vbs == 0)
+        hvci_drift = hvci_running and (reg_hvci_enabled == 0)
+        reg_matches = not (vbs_drift or hvci_drift)
+
+    return {
+        "mode": "live-windows",
+        "start_time": start.isoformat(),
+        "end_time": end.isoformat(),
+        "virtualization_environment": virt_env,
+        "firmware_type": parsed.get("firmware_type", "UEFI"),
+        "secure_boot_status": parsed.get("secure_boot_status", "query_error"),
+        "device_guard_status": dg_status,
+        "bcd_query_status": bcd.get("bcd_query_status", "query_error"),
+        "vtl1_running": vtl1_running,
+        "bcd_hypervisorlaunchtype_value": bcd.get("hypervisorlaunchtype_value"),
+        "registry_matches_running_vtl1_state": reg_matches,
+        "uefi_secure_boot_enabled": parsed.get("uefi_secure_boot_enabled"),
+        "evidence": {
+            "vbs_status": vbs_status,
+            "security_services_running": running_svcs,
+            "available_security_properties": avail_props,
+            "bcd_source": bcd.get("source"),
+            "reg_enable_vbs": reg_enable_vbs,
+            "reg_hvci_enabled": reg_hvci_enabled,
+        },
+        "scope_note": "Read-only comparison of live Win32_DeviceGuard VTL 1 state against staged BCD hypervisorlaunchtype, DeviceGuard registry keys, and UEFI Secure Boot.",
+    }
+
+
+def run_t1685_007_safeboot_bcd():
+    """Live T1685.007 collector: inspect BCD {current} SafeBoot flag (0x25000080) and active EDR/security SafeBoot registry keys without hardcoding Defender."""
+    _require_windows()
+    start = datetime.now(timezone.utc)
+    bcd = _read_bcd_current_elements()
+
+    script = r'''
+$ErrorActionPreference='SilentlyContinue'
+$regStatus = 'ok'
+$minimalKeys = @()
+$networkKeys = @()
+try {
+  $minimalKeys = @(Get-ChildItem -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SafeBoot\Minimal' -ErrorAction Stop | Select-Object -ExpandProperty PSChildName)
+  $networkKeys = @(Get-ChildItem -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SafeBoot\Network' -ErrorAction Stop | Select-Object -ExpandProperty PSChildName)
+} catch {
+  $regStatus = if ($_.Exception.Message -match 'Access is denied|Unauthorized') { 'access_denied' } else { 'query_error' }
+}
+
+$knownCandidates = @(
+  'WinDefend','Sense','CSFalconService','SentinelAgent','CylanceSvc',
+  'Sophos Endpoint Defense Service','SEDService','CBDefense','xagt',
+  'TaniumClient','Elastic Agent','Sysmon','Sysmon64'
+)
+$runningServices = @{}
+try {
+  foreach ($svc in (Get-Service -ErrorAction Stop)) {
+    if ($svc.Status -eq 'Running') {
+      $runningServices[$svc.Name.ToLowerInvariant()] = $svc.Name
+    }
+  }
+} catch {}
+try {
+  foreach ($drv in (Get-CimInstance -ClassName Win32_SystemDriver -ErrorAction Stop)) {
+    if ($drv.State -eq 'Running' -and $drv.Name) {
+      $runningServices[$drv.Name.ToLowerInvariant()] = $drv.Name
+    }
+  }
+} catch {}
+
+$discovered = New-Object System.Collections.Generic.List[string]
+foreach ($cand in $knownCandidates) {
+  $lc = $cand.ToLowerInvariant()
+  if ($runningServices.ContainsKey($lc)) {
+    [void]$discovered.Add($runningServices[$lc])
+  }
+}
+
+# Also dynamically discover any running service or kernel driver with an FSFilter Anti-Virus (320000-329999) or Activity Monitor (360000-389999) minifilter altitude
+try {
+  $svcRoot = 'HKLM:\SYSTEM\CurrentControlSet\Services'
+  foreach ($inst in (Get-ChildItem -Path "$svcRoot\*\Instances\*" -ErrorAction SilentlyContinue)) {
+    $altProp = (Get-ItemProperty -Path $inst.PSPath -Name Altitude -ErrorAction SilentlyContinue).Altitude
+    $altNum = 0
+    if ($null -ne $altProp -and [int]::TryParse([string]$altProp, [ref]$altNum)) {
+      if (($altNum -ge 320000 -and $altNum -le 329999) -or ($altNum -ge 360000 -and $altNum -le 389999)) {
+        $svcName = $inst.PSParentPath | Split-Path -Parent | Split-Path -Leaf
+        $lc = $svcName.ToLowerInvariant()
+        if ($runningServices.ContainsKey($lc) -and -not $discovered.Contains($runningServices[$lc])) {
+          [void]$discovered.Add($runningServices[$lc])
+        }
+      }
+    }
+  }
+} catch {}
+
+@{
+  safeboot_reg_status = $regStatus
+  minimal_key_count = $minimalKeys.Count
+  network_key_count = $networkKeys.Count
+  minimal_keys = $minimalKeys
+  network_keys = $networkKeys
+  discovered_security_services = @($discovered)
+} | ConvertTo-Json -Compress
+'''
+    parsed, ps_status = _run_ps_json(script, timeout=25)
+    end = datetime.now(timezone.utc)
+
+    bcd_status = bcd.get("bcd_query_status", "query_error")
+    bcd_safeboot_absent = (not bool(bcd.get("safeboot_staged"))) if bcd_status == "ok" else None
+
+    if ps_status != "ok" or not isinstance(parsed, dict):
+        return {
+            "mode": "live-windows",
+            "start_time": start.isoformat(),
+            "end_time": end.isoformat(),
+            "bcd_query_status": bcd_status,
+            "safeboot_reg_status": ps_status,
+            "bcd_safeboot_absent": bcd_safeboot_absent,
+            "active_edr_safeboot_keys_intact": None,
+            "evidence": {"bcd_source": bcd.get("source"), "staged_safeboot_mode": bcd.get("staged_safeboot_mode")},
+            "scope_note": "Read-only inspection of BCD {current} SafeBoot staging flag (0x25000080) and active EDR SafeBoot registry keys.",
+        }
+
+    reg_status = parsed.get("safeboot_reg_status", "query_error")
+    min_keys = {k.lower() for k in _as_str_list(parsed.get("minimal_keys"))}
+    net_keys = {k.lower() for k in _as_str_list(parsed.get("network_keys"))}
+    all_sb_keys = min_keys | net_keys
+    discovered = _as_str_list(parsed.get("discovered_security_services"))
+
+    matched_keys = [svc for svc in discovered if svc.lower() in all_sb_keys]
+    if reg_status != "ok" or not discovered:
+        edr_keys_intact = None
+    else:
+        edr_keys_intact = len(matched_keys) > 0
+
+    return {
+        "mode": "live-windows",
+        "start_time": start.isoformat(),
+        "end_time": end.isoformat(),
+        "bcd_query_status": bcd_status,
+        "safeboot_reg_status": reg_status,
+        "bcd_safeboot_absent": bcd_safeboot_absent,
+        "active_edr_safeboot_keys_intact": edr_keys_intact,
+        "evidence": {
+            "bcd_source": bcd.get("source"),
+            "staged_safeboot_mode": bcd.get("staged_safeboot_mode"),
+            "safeboot_minimal_key_count": int(parsed.get("minimal_key_count", 0) or 0),
+            "safeboot_network_key_count": int(parsed.get("network_key_count", 0) or 0),
+            "discovered_security_services": discovered,
+            "matched_safeboot_keys": matched_keys,
+        },
+        "scope_note": "Read-only inspection of BCD {current} SafeBoot staging flag (0x25000080) and dynamically discovered active security service SafeBoot registry registrations.",
+    }
+
+
+def run_all_internals_checks(window_seconds=4, selected=None, suite="core"):
+    """Execute live read-only Windows Internals checks (`core`, `t1685-bcd`, `all`, or explicit `--checks`) and return (slug, test_id, observation)."""
     _require_windows()
     _validate_window(window_seconds)
-    runners = [
+    core_runners = [
         ("etw-integrity", "WIN-ETW-INTEGRITY", lambda: run_etw_integrity(window_seconds=window_seconds)),
         ("kernel-ppl-hvci", "WIN-KERNEL-PPL-HVCI", run_kernel_ppl_hvci),
         ("xproc-handle", "WIN-XPROC-HANDLE", lambda: run_xproc_handle(window_seconds=window_seconds)),
         ("lsa-ssp-audit", "WIN-LSA-SSP-AUDIT", run_lsa_ssp_audit),
         ("cmdline-wmi", "WIN-CMDLINE-WMI", lambda: run_cmdline_wmi(window_seconds=window_seconds)),
     ]
+    t1685_bcd_runners = [
+        ("t1685-006-vbs-vtl1-bcd", "WIN-T1685-006-VBS-VTL1-BCD", run_t1685_006_vbs_vtl1_bcd),
+        ("t1685-007-safeboot-bcd", "WIN-T1685-007-SAFEBOOT-BCD", run_t1685_007_safeboot_bcd),
+    ]
+    all_runners = core_runners + t1685_bcd_runners
+
     if selected:
         wanted = {s.strip().lower() for s in selected if s.strip()}
-        runners = [item for item in runners if item[0].lower() in wanted or item[1].lower() in wanted]
+        runners = [item for item in all_runners if item[0].lower() in wanted or item[1].lower() in wanted]
         if not runners:
             raise ValueError(f"No matching checks for: {', '.join(selected)}")
+    elif suite == "t1685-bcd":
+        runners = t1685_bcd_runners
+    elif suite == "all":
+        runners = all_runners
+    else:
+        runners = core_runners
+
     results = []
     for slug, test_id, fn in runners:
         results.append((slug, test_id, fn()))

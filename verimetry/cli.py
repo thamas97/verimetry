@@ -46,7 +46,11 @@ def generate(out, key, live=False, window=4, checks=None, suite="classic", perso
         host = platform.node()
         host_fp = collect_host_fingerprint()
         packages = []
-        for slug, test_id, observation in run_all_internals_checks(window_seconds=window, selected=selected):
+        assess_suite = suite if suite in ("core", "t1685-bcd", "all") else "core"
+        run_kwargs = {"window_seconds": window, "selected": selected}
+        if assess_suite != "core":
+            run_kwargs["suite"] = assess_suite
+        for slug, test_id, observation in run_all_internals_checks(**run_kwargs):
             packages.append((
                 slug,
                 make_receipt(
@@ -214,8 +218,14 @@ def main(argv=None):
         if name == "assess":
             p.add_argument("--window", type=int, default=4, help="Seconds to observe after canaries (1..15)")
             p.add_argument(
+                "--suite",
+                choices=("core", "t1685-bcd", "all"),
+                default="core",
+                help="Live assessment suite: 'core' (5 core canaries), 't1685-bcd' (live T1685.006/007 BCD checks), or 'all' (all 7 live checks)",
+            )
+            p.add_argument(
                 "--checks",
-                help="Optional comma-separated subset of check slugs/IDs (default: all 5 checks)",
+                help="Optional comma-separated subset of check slugs/IDs (overrides --suite)",
             )
         else:
             p.add_argument("--suite", choices=("classic", "internals", "t1685"), default="classic", help="Synthetic demo suite (classic, internals, or t1685)")
