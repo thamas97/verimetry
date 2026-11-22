@@ -1,5 +1,6 @@
 """Experimental OSCAL-shaped mapping; NOT a certified/schema-validated OSCAL artifact."""
 from uuid import uuid4
+from . import __version__
 from .core import utc_now, TEST_SPECS
 from .receipts import extract_unverified_receipt
 
@@ -47,7 +48,7 @@ def export_draft(packages):
             "metadata": {
                 "title": "Verimetry experimental assessment results",
                 "last-modified": utc_now(),
-                "version": "1.0.0-rc1",
+                "version": __version__,
                 "oscal-version": "1.1.3",
             },
             "import-ap": {"href": "./assessment-plan.json"},

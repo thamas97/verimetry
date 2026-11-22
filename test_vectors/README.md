@@ -1,6 +1,6 @@
 # Verimetry DSSE v1 Conformance Test Vectors
 
-These golden vectors define the cross-language offline verification specification for **Verimetry `v1.0.0-rc1`** (`Apache-2.0`). Any Go, Rust, TypeScript, or Python verifier implementation **MUST** pass all 8 vectors against [`test-signer.pub.pem`](./test-signer.pub.pem).
+These golden vectors define the cross-language offline verification specification for **Verimetry `v1.0.0`** (`Apache-2.0`). Any Go, Rust, TypeScript, or Python verifier implementation **MUST** pass all 8 vectors against [`test-signer.pub.pem`](./test-signer.pub.pem).
 
 - **Trusted Test Public Key:** [`test-signer.pub.pem`](./test-signer.pub.pem) (Ed25519; private key discarded after generation)
 - **Expected `keyid` (SHA-256 of raw 32-byte Ed25519 public key):** `beb5f0c825a380ea51be7b271dc941114c5bb3dc36049f3a77933155fde0751c`

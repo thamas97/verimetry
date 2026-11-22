@@ -56,7 +56,7 @@ All audit policy checks query **`advapi32!AuditQuerySystemPolicy`** (with `Audit
 | `WIN-CMDLINE-WMI` | `T1047` | `cmd.exe /d /c echo VERIMETRY_CANARY_PING`, `ProcessCreationIncludeCmdLine_Enabled`, Event `4688`, `WMI-Activity/Operational` | `au-12`, `au-3` |
 
 ### 7 Hardened `T1685` (Disable or Modify Tools) Enterprise Scenarios (`demo --suite t1685`, rule `-v2`)
-| Check ID | MITRE ATT&CK | Enterprise Fleet Hardening (`v1.0.0-rc1`) | OSCAL Controls |
+| Check ID | MITRE ATT&CK | Enterprise Fleet Hardening (`v1.0.0`) | OSCAL Controls |
 | :--- | :--- | :--- | :--- |
 | `WIN-T1685-001-EDR-MINIFILTER` | `T1685.001` / `T1562.001` | Dynamic Microsoft FSFilter Anti-Virus (`320000–329999`) & Activity Monitor (`360000–389999`) scan + optional tenant baseline (`UNSPECIFIED_EDR_BASELINE`) instead of hardcoding `WinDefend`. | `si-7`, `au-9`, `ac-6` |
 | `WIN-T1685-002-CLOUD-LOG` | `T1685.002` / `T1562.008` | Unconfigured forwarders gate to `INCONCLUSIVE` (`CLOUD_FORWARDER_NOT_CONFIGURED`); async ingestion windows gate to `INCONCLUSIVE` (`ASYNC_INGESTION_PENDING`). | `au-4`, `au-6`, `au-9`, `si-4` |

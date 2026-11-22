@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "verimetry"
-version = "1.0.0rc1"
+version = "1.0.0"
 description = "Local-first, evidence-gated Windows Internals telemetry assurance with DSSE Ed25519 receipts"
 license = "Apache-2.0"
 requires-python = ">=3.11"

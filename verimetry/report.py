@@ -1004,7 +1004,7 @@ def build_report(packages, output, persona="both"):
     <div class="brand">
       <span class="brand-dot"></span>
       <span class="brand-name">VERIMETRY</span>
-      <span class="brand-tag mono">v1.0.0-rc1 · DSSE Ed25519</span>
+      <span class="brand-tag mono">v{__version__} · DSSE Ed25519</span>
     </div>
     <div class="controls-bar">
       <div class="role-switcher" role="tablist" aria-label="Role Switcher">
@@ -1478,7 +1478,7 @@ def build_comparison_report(signed_package, output, persona="both"):
     <div class="brand">
       <span class="brand-dot"></span>
       <span class="brand-name">VERIMETRY</span>
-      <span class="brand-tag mono">Multi-Run Delta · DSSE v1 · v1.0.0-rc1</span>
+      <span class="brand-tag mono">Multi-Run Delta · DSSE v1 · v{__version__}</span>
     </div>
     <div class="controls-bar">
       <div class="role-switcher" role="tablist" aria-label="Role Switcher">

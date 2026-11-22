@@ -1,7 +1,7 @@
 # Verimetry — Complete Content & Launch Kit
 
 > [!IMPORTANT]
-> **Zero-Fabrication Fact Guardrail:** Every single statistic in this kit is strictly drawn from verified 2026 industry reports (*IBM Cost of a Data Breach 2026*, *Mandiant M-Trends 2026*, *Palo Alto Unit 42 Global IR 2026*), documented Microsoft Windows Internals behavior, and real empirical outputs from the `verimetry` (`v1.0.0-rc1`, `63/63` pytest) codebase and live Windows 11 host (`Tha`) runs. No numbers are invented.
+> **Zero-Fabrication Fact Guardrail:** Every single statistic in this kit is strictly drawn from verified 2026 industry reports (*IBM Cost of a Data Breach 2026*, *Mandiant M-Trends 2026*, *Palo Alto Unit 42 Global IR 2026*), documented Microsoft Windows Internals behavior, and real empirical outputs from the `verimetry` (`v1.0.0`, `65/65` pytest) codebase and live Windows 11 host (`Tha`) runs. No numbers are invented.
 
 ---
 
@@ -50,7 +50,7 @@
 
 * **Slide 7 (CTA + Comment Keyword):**
   * **Headline:** Want to Press the "Test Button" on Your Windows Telemetry?
-  * **Body:** We built **Verimetry** with 5 live Windows Internals canaries, 7 `T1685` defense-impairment scenarios, dual **Customer / MSSP Operations** reports, and `63/63` passing tests.
+  * **Body:** We built **Verimetry** with 5 live Windows Internals canaries, 7 `T1685` defense-impairment scenarios, dual **Customer / MSSP Operations** reports, and `65/65` passing tests.
   * **CTA Box:** Comment **`RECEIPT`** below and I'll send you the GitHub repo, the 30-second "Test Now" sandbox, and a real sample `comparison-report.html`.
 
 ### Comment Keyword Funnel (`RECEIPT`)
@@ -148,7 +148,7 @@ Try the interactive sandbox or run it locally in 30s -> [LINK]
   `verimetry compare` signs the delta with Ed25519.
 * **5/5:** Best part? Edit a `FAIL` to `PASS` in any receipt JSON and run `verimetry verify` offline:
   `REJECTED: Receipt digest mismatch`
-  63/63 tests passing. Dual `Customer View` ↔ `MSSP Operations View` HTML reports.
+  65/65 tests passing. Dual `Customer View` ↔ `MSSP Operations View` HTML reports.
   Repo + 30-second interactive sandbox: `[LINK]`
 
 ---
@@ -166,7 +166,7 @@ Open **[docs/sandbox.html](./sandbox.html)** (host this single static HTML file 
 ### Path B: 1-Click GitHub Codespaces (Zero Local Setup — Linux Container)
 Add a `.devcontainer/devcontainer.json` file to your GitHub repo so anyone clicking **"Open in GitHub Codespaces"** gets Python 3.11 + `verimetry` preinstalled and runs:
 ```bash
-pytest -q                                              # 63/63 tests passing
+pytest -q                                              # 65/65 tests passing
 python -m verimetry demo --suite internals --out ./demo-internals
 python -m verimetry demo --suite t1685 --out ./demo-t1685
 ```
@@ -205,7 +205,7 @@ start .\evidence-comparison\comparison-report.html
 | **`3:15 – 4:40`** | **Live Demo Act 2 — Elevated Admin Run (`.\evidence-elevated`) & `verimetry compare`** | Run elevated PowerShell `assess` + `verimetry compare --before .\evidence --after .\evidence-elevated`. Open `comparison-report.html`. | Walk through the exact real numbers on `Tha`: **50% `INCONCLUSIVE` burn-down (`4 -> 2`)**, **0 regressions**, and **2 real hidden gaps exposed**: `WIN-ETW-INTEGRITY` (`DiagTrack-Listener` inactive) and `WIN-LSA-SSP-AUDIT` (Audit Registry disabled + 0 LSA SACL rules). |
 | **`4:40 – 5:50`** | **Dual-Persona UX: Customer View ↔ MSSP Operations View** | Browser walkthrough of `comparison-report.html`. Click MITRE ATT&CK external badge (`T1562.006`, `T1547.005`), flip theme Dark ↔ Light, flip Role Switcher to `MSSP Operations View`, click Copy on `auditpol` remediation command. | Show how one cryptographically verified HTML artifact serves both a non-technical CISO/auditor and an L2 SOC telemetry engineer. |
 | **`5:50 – 6:50`** | **Live Demo Act 3 — The Tamper Trap (`verimetry verify`)** | Copy `receipt-lsa-ssp-audit.json`, replace `"verdict": "FAIL"` with `"verdict": "PASS"`, run `python -m verimetry verify --receipt .\forged-receipt.json --public .\evidence-elevated\signer.pub.pem`. Zoom in on `REJECTED: Receipt digest mismatch`. | Explain dual verification: Ed25519 signature over canonical JSON SHA-256 **plus** deterministic rule recomputation (`validate_receipt`). |
-| **`6:50 – 7:45`** | **Roadmap & Call to Action** | Show `demo --suite t1685` (the 7 expanded `T1685` defense-impairment scenarios, `63/63` pytest passing) and briefly mention the `verimetry-mcp` guardrailed virtual-patch roadmap. | Be transparently honest about scope boundaries (point-in-time proof, local trust boundary, OSCAL draft). Link GitHub repo & interactive sandbox in description. |
+| **`6:50 – 7:45`** | **Roadmap & Call to Action** | Show `demo --suite t1685` (the 7 expanded `T1685` defense-impairment scenarios, `65/65` pytest passing) and briefly mention the `verimetry-mcp` guardrailed virtual-patch roadmap. | Be transparently honest about scope boundaries (point-in-time proof, local trust boundary, OSCAL draft). Link GitHub repo & interactive sandbox in description. |
 
 ---
 
@@ -218,7 +218,7 @@ verimetry/
 │   └── devcontainer.json          # 1-click GitHub Codespaces "Test Now" container
 ├── .github/
 │   ├── workflows/
-│   │   └── ci.yml                 # Runs pytest (63/63) + demo suites on Ubuntu & Windows
+│   │   └── ci.yml                 # Runs pytest (65/65) + demo suites on Ubuntu & Windows
 │   └── ISSUE_TEMPLATE/
 │       └── new_canary_check.md    # Structured template for community MITRE canaries
 ├── docs/
@@ -269,7 +269,7 @@ jobs:
 ```
 
 ### High-Trust `README.md` Polish Checklist
-1. **Top Badges:** `Tests: 63 passing` · `Python 3.11+` · `Runtime Deps: 1 (cryptography)` · `License: Apache-2.0` · `Open in Codespaces`.
+1. **Top Badges:** `Tests: 65 passing` · `Python 3.11+` · `Runtime Deps: 1 (cryptography)` · `License: Apache-2.0` · `Open in Codespaces`.
 2. **Above-the-Fold GIF (12 seconds):** Screen recording of `verimetry compare` → flipping `Customer View` / `MSSP Operations View` → `verimetry verify` rejecting a forged receipt.
 3. **Explicit "Non-Destructive Guarantee" & "Limitations" Box:** Security engineers star repos that explicitly state what the tool does *not* claim (point-in-time proof, shared local collector/signer trust boundary, experimental OSCAL draft).
 4. **3 Pinned `good first issue` Tickets** to invite contributors:
