@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Verimetry — Evidence Before Assurance</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #090a0f; color: #f1f5f9; font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif; padding: 40px 20px 72px; }
+    .wrap { max-width: 960px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .hero { background: #121621; border: 1px solid #232a3d; border-radius: 16px; padding: 32px; display: grid; grid-template-columns: 1.35fr 0.85fr; gap: 24px; align-items: center; }
+    @media (max-width: 760px) { .hero { grid-template-columns: 1fr; } }
+    .eyebrow { color: #38bdf8; font-size: 11.5px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; }
+    h1 { margin: 10px 0 12px; font-size: clamp(26px, 4vw, 38px); line-height: 1.15; letter-spacing: -0.025em; }
+    .muted { color: #94a3b8; }
+    .hero img { width: 100%; border-radius: 12px; border: 1px solid #232a3d; display: block; }
+    .cta-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 9px; font-size: 13.5px; font-weight: 700; text-decoration: none; border: 1px solid #323c56; color: #f1f5f9; background: #181d2c; }
+    .btn:hover { border-color: #6366f1; }
+    .btn-primary { background: #6366f1; border-color: #6366f1; color: #ffffff; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+    .card { background: #121621; border: 1px solid #232a3d; border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 8px; text-decoration: none; color: inherit; transition: border-color 0.15s ease; }
+    .card:hover { border-color: #38bdf8; }
+    .card h2 { margin: 0; font-size: 16px; }
+    .card p { margin: 0; font-size: 13px; color: #94a3b8; }
+    .badge { display: inline-block; align-self: flex-start; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid #323c56; color: #38bdf8; }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .stat { background: #121621; border: 1px solid #232a3d; border-radius: 12px; padding: 16px; }
+    .stat-num { font-size: 24px; font-weight: 800; color: #10b981; }
+    .stat-lbl { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Verimetry · v1.0.0-rc1 · Apache-2.0 Open Source</div>
+        <h1>Evidence Before Assurance for Windows Internals Telemetry</h1>
+        <p class="muted">Zero kernel drivers. Zero background daemons. Strict three-valued logic (<code class="mono">PASS</code>, <code class="mono">FAIL</code>, <code class="mono">INCONCLUSIVE</code>) with offline-verifiable DSSE v1 Ed25519 receipts and multi-run drift detection.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="./sandbox.html">Launch 30s Test Now Sandbox &rarr;</a>
+          <a class="btn" href="./sample-comparison-report.html">View Signed Sample Report</a>
+        </div>
+      </div>
+      <img src="./assets/carousel_slide1_cover.jpg" alt="Verimetry fractured green shield visual" />
+    </section>
+
+    <section class="stats">
+      <div class="stat"><div class="stat-num mono">0</div><div class="stat-lbl">Third-party drivers or background agents required</div></div>
+      <div class="stat"><div class="stat-num mono" style="color:#f59e0b">50%</div><div class="stat-lbl">INCONCLUSIVE burn-down on live Windows 11 elevation (Tha)</div></div>
+      <div class="stat"><div class="stat-num mono" style="color:#38bdf8">63 / 63</div><div class="stat-lbl">Automated tests passing across 5 core, 7 T1685 &amp; 8 DSSE vectors</div></div>
+      <div class="stat"><div class="stat-num mono" style="color:#f43f5e">22s</div><div class="stat-lbl">Median attacker hand-off time (Mandiant M-Trends 2026)</div></div>
+    </section>
+
+    <section class="grid">
+      <a class="card" href="./sandbox.html">
+        <span class="badge mono">INTERACTIVE</span>
+        <h2>Test Now Browser Sandbox</h2>
+        <p>Replay real Windows 11 (Tha) non-elevated vs. elevated runs, toggle Customer/MSSP views, and trigger the live Ed25519 Tamper Trap.</p>
+      </a>
+      <a class="card" href="./sample-comparison-report.html">
+        <span class="badge mono">ED25519 SIGNED</span>
+        <h2>Sample Comparison Report</h2>
+        <p>Inspect an authentic signed multi-run delta report with clickable MITRE ATT&amp;CK badges and copyable PowerShell/auditpol remediations.</p>
+      </a>
+      <a class="card" href="./carousel.html">
+        <span class="badge mono">4:5 PDF READY</span>
+        <h2>7-Slide Launch Carousel</h2>
+        <p>View or print-to-PDF the 1080&times;1350 LinkedIn &amp; Instagram deck built strictly from verified 2026 facts and live host data.</p>
+      </a>
+      <a class="card" href="./sample-pack/verimetry_sample_leave_behind.zip" download>
+        <span class="badge mono">OFFLINE VERIFY ZIP</span>
+        <h2>MSSP / Insurer Sample Pack</h2>
+        <p>Download the 3-file leave-behind bundle (HTML report, signed JSON receipt, and trusted public key) to test <code class="mono">verimetry verify</code> offline.</p>
+      </a>
+      <a class="card" href="./videos/verimetry_3d_short_9x16.mp4">
+        <span class="badge mono">9:16 MP4 · 1m 03s · VO</span>
+        <h2>Vertical 3D Short Explainer (Narrated)</h2>
+        <p>Play or download the 720&times;1280 9:16 3D motion-graphics short with synced studio voiceover and auto-ducked soundtrack for Reels, TikTok, Shorts &amp; LinkedIn mobile.</p>
+      </a>
+      <a class="card" href="./videos/verimetry_longform_results_16x9.mp4">
+        <span class="badge mono">16:9 MP4 · 3m 13s · VO</span>
+        <h2>Long-Form Results Walkthrough (Narrated)</h2>
+        <p>Play or download the 1280&times;720 7-chapter narrated walkthrough covering live Windows 11 (Tha) runs, integer basis-point compare metrics, DSSE v1 Tamper Trap &amp; Apache-2.0 taxonomy.</p>
+      </a>
+    </section>
+  </div>
+</body>
+</html>

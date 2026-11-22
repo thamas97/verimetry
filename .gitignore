@@ -1,0 +1,24 @@
+# Python & Virtual Environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.pytest_tmp/
+build/
+dist/
+
+# Local Evidence Output & Private Signing Keys (NEVER commit private keys)
+evidence/
+evidence-elevated/
+evidence-comparison/
+out-demo*/
+demo-*/
+ci-demo-*/
+*.pem
+!docs/sample-pack/sample-signer.pub.pem
+!test_vectors/test-signer.pub.pem
+forged-receipt.json
+windows-inventory.json
+inventory-report.html

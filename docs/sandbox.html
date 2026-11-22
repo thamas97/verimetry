@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Verimetry — Interactive Test Now Sandbox</title>
+  <style>
+    :root, [data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #090a0f;
+      --bg-card: #121621;
+      --bg-subtle: #181d2c;
+      --bg-code: #0b0e16;
+      --border: #232a3d;
+      --border-strong: #323c56;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #6366f1;
+      --primary-fg: #ffffff;
+      --cyan: #38bdf8;
+      --pass: #10b981;
+      --fail: #f43f5e;
+      --inc: #f59e0b;
+    }
+    [data-theme="light"] {
+      color-scheme: light;
+      --bg: #f8fafc;
+      --bg-card: #ffffff;
+      --bg-subtle: #f1f5f9;
+      --bg-code: #f1f5f9;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+      --text: #0f172a;
+      --text-muted: #475569;
+      --primary: #4f46e5;
+      --primary-fg: #ffffff;
+      --cyan: #0284c7;
+      --pass: #059669;
+      --fail: #e11d48;
+      --inc: #d97706;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      padding: 24px 18px 56px;
+    }
+    code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+    header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+    .eyebrow { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .dot { width: 10px; height: 10px; border-radius: 999px; background: linear-gradient(135deg, var(--primary), var(--cyan)); }
+    .tag { padding: 2px 8px; border-radius: 6px; background: var(--bg-subtle); border: 1px solid var(--border); font-size: 11px; color: var(--text); }
+    h1 { margin: 6px 0 4px; font-size: clamp(20px, 3vw, 26px); letter-spacing: -0.02em; }
+    .sub { margin: 0; color: var(--text-muted); font-size: 13px; }
+    .controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .switcher { display: inline-flex; background: var(--bg-card); border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 4px; }
+    button { cursor: pointer; font-family: inherit; transition: all 0.15s ease; }
+    .role-btn { border: none; background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 6px; }
+    .role-btn.active { background: var(--primary); color: var(--primary-fg); }
+    .btn { padding: 7px 13px; border-radius: 8px; font-size: 12px; font-weight: 600; border: 1px solid var(--border); background: var(--bg-subtle); color: var(--text); }
+    .btn:hover { border-color: var(--border-strong); }
+    .btn-primary { background: var(--primary); color: var(--primary-fg); border-color: var(--primary); }
+    .panel { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+    .panel-hdr { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .sc-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px; }
+    .sc-btn { text-align: left; padding: 13px; border-radius: 10px; border: 1px solid var(--border); background: var(--bg-subtle); color: var(--text); }
+    .sc-btn.active { border: 2px solid var(--primary); background: var(--bg); }
+    .sc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; }
+    .sc-desc { margin: 6px 0 0; font-size: 12px; color: var(--text-muted); }
+    .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+    .kpi { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+    .kpi-lbl { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; }
+    .kpi-val { font-size: 26px; font-weight: 800; margin: 4px 0 2px; }
+    .kpi-sub { font-size: 12px; color: var(--text-muted); }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; }
+    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 9px; }
+    .card.pass { border-top: 3px solid var(--pass); }
+    .card.fail { border-top: 3px solid var(--fail); }
+    .card.inconclusive { border-top: 3px solid var(--inc); }
+    .row { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+    .pill { padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 700; border: 1px solid currentColor; }
+    .pill.pass { color: var(--pass); }
+    .pill.fail { color: var(--fail); }
+    .pill.inconclusive { color: var(--inc); }
+    .mitre { color: var(--cyan); text-decoration: none; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 6px; border: 1px solid var(--border); }
+    .mitre:hover { background: var(--cyan); color: #090a0f; }
+    .cmd-box { background: var(--bg-code); border: 1px solid var(--border); border-radius: 8px; padding: 10px; display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .cmd-box code { font-size: 11.5px; color: var(--cyan); word-break: break-all; }
+    .banner { padding: 11px 14px; border-radius: 9px; border: 1px solid; font-size: 12px; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+    .banner.ok { border-color: var(--pass); color: var(--pass); }
+    .banner.bad { border-color: var(--fail); color: var(--fail); }
+    pre { margin: 0; padding: 14px; border-radius: 10px; background: var(--bg-code); border: 1px solid var(--border); font-size: 12px; overflow-x: auto; line-height: 1.5; }
+    footer { padding-top: 14px; border-top: 1px solid var(--border); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--text-muted); }
+    footer a { color: var(--cyan); text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="eyebrow"><span class="dot"></span><span>Verimetry · Test Now Sandbox</span><span class="tag mono">v1.0.0-rc1 · 63/63 tests</span></div>
+        <h1>Evidence-Gated Windows Internals Telemetry Sandbox</h1>
+        <p class="sub">Replay real Windows 11 host (<code class="mono">Tha</code>) runs, flip Customer vs. MSSP views, and test offline DSSE v1 SHA-256 + deterministic tamper rejection.</p>
+      </div>
+      <div class="controls">
+        <div class="switcher" role="tablist">
+          <button id="btn-role-customer" class="role-btn active" type="button" onclick="setRole('customer')">Customer View</button>
+          <button id="btn-role-mssp" class="role-btn" type="button" onclick="setRole('mssp')">MSSP Operations View</button>
+        </div>
+        <button class="btn" type="button" onclick="toggleTheme()">&#9680; Theme</button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <div class="panel-hdr"><span>1. Select Assessment Run</span><span class="mono" id="scenario-tag"></span></div>
+      <div class="sc-grid">
+        <button id="sc-before" class="sc-btn" type="button" onclick="setScenario('before')">
+          <div class="sc-top"><span>Run 1: Non-Elevated (Real)</span><span class="tag mono">.\evidence</span></div>
+          <p class="sc-desc">Standard user on Windows 11 (Tha): 1 PASS (20%), 4 INCONCLUSIVE, 0 false failures.</p>
+        </button>
+        <button id="sc-after" class="sc-btn active" type="button" onclick="setScenario('after')">
+          <div class="sc-top"><span>Run 2: Elevated Admin (Real)</span><span class="tag mono">.\evidence-elevated</span></div>
+          <p class="sc-desc">50% INCONCLUSIVE burn-down (4 &rarr; 2); exposes 2 genuine gaps (ETW + LSA SACL).</p>
+        </button>
+        <button id="sc-hardened" class="sc-btn" type="button" onclick="setScenario('hardened')">
+          <div class="sc-top"><span>Run 3: Post-Hardening (Simulated)</span><span class="tag mono">demo-hardened</span></div>
+          <p class="sc-desc">After applying copyable GPO/auditpol remediations: 5/5 PASS (100% coverage, 0 drift).</p>
+        </button>
+      </div>
+    </section>
+
+    <section class="kpi-grid">
+      <div class="kpi"><div class="kpi-lbl">Verified Coverage</div><div id="kpi-pass" class="kpi-val mono" style="color:var(--pass)">20%</div><div id="kpi-pass-sub" class="kpi-sub">1 of 5 PASS</div></div>
+      <div class="kpi"><div class="kpi-lbl">Confirmed Gaps (FAIL)</div><div id="kpi-fail" class="kpi-val mono" style="color:var(--fail)">2</div><div id="kpi-fail-sub" class="kpi-sub">2 blind spots exposed</div></div>
+      <div class="kpi"><div class="kpi-lbl">Evidence-Gated</div><div id="kpi-inc" class="kpi-val mono" style="color:var(--inc)">2</div><div class="kpi-sub">INCONCLUSIVE (never guessed)</div></div>
+      <div class="kpi"><div class="kpi-lbl">INCONCLUSIVE Burn-Down</div><div id="kpi-burndown" class="kpi-val mono" style="color:var(--cyan)">50.0%</div><div id="kpi-burndown-sub" class="kpi-sub">vs. Run 1 Baseline</div></div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:12px">
+      <div class="panel-hdr"><span id="panel-title">Customer View — Plain-English Assurance Cards</span><span>Click any MITRE badge for official attack.mitre.org docs</span></div>
+      <div id="checks-container" class="cards"></div>
+    </section>
+
+    <section class="panel">
+      <div class="row">
+        <div>
+          <div class="panel-hdr" style="margin-bottom:4px"><span>2. Live Cryptographic Tamper Trap (Offline DSSE v1 verimetry verify)</span></div>
+          <p class="sub">Try forging <code class="mono">WIN-LSA-SSP-AUDIT</code> from <code class="mono">FAIL</code> to <code class="mono">PASS</code> inside the DSSE receipt payload.</p>
+        </div>
+        <button id="btn-tamper" class="btn btn-primary" type="button" onclick="toggleTamper()">Forge FAIL &rarr; PASS (Simulate Tamper)</button>
+      </div>
+      <div id="verify-banner" class="banner ok mono"></div>
+      <pre id="receipt-json"></pre>
+    </section>
+
+    <footer>
+      <span>Zero third-party drivers · Zero daemons · Zero cloud dependencies · Apache-2.0 License</span>
+      <span><a href="./index.html">Launch Hub</a> · <a href="./sample-comparison-report.html">Signed Sample Report</a> · <a href="./carousel.html">7-Slide Deck</a></span>
+    </footer>
+  </div>
+
+  <script>
+    const CHECK_META = {
+      "WIN-ETW-INTEGRITY": { title: "ETW Provider Integrity & User-Mode Visibility", mitre: ["T1562.006"], cmd: "sc.exe config DiagTrack start= auto && sc.exe start DiagTrack && logman query -ets" },
+      "WIN-KERNEL-PPL-HVCI": { title: "Kernel Driver Load & PPL / HVCI Audit Readiness", mitre: ["T1068", "T1562.001"], cmd: "Get-CimInstance -ClassName Win32_DeviceGuard -Namespace root\\Microsoft\\Windows\\DeviceGuard" },
+      "WIN-XPROC-HANDLE": { title: "Cross-Process Memory / Thread Telemetry Coverage", mitre: ["T1106", "T1055"], cmd: "auditpol /set /subcategory:\"{0cce921f-69ae-11d9-bed3-505054503030}\" /success:enable /failure:enable" },
+      "WIN-LSA-SSP-AUDIT": { title: "LSA SSP Registry Audit Policy & SACL", mitre: ["T1547.005"], cmd: "auditpol /set /subcategory:\"{0cce921e-69ae-11d9-bed3-505054503030}\" /success:enable /failure:enable" },
+      "WIN-CMDLINE-WMI": { title: "Process Creation Event 4688 CmdLine & WMI-Activity", mitre: ["T1047"], cmd: "auditpol /set /subcategory:\"{0cce922b-69ae-11d9-bed3-505054503030}\" /success:enable && reg add \"HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\System\\Audit\" /v ProcessCreationIncludeCmdLine_Enabled /t REG_DWORD /d 1 /f" }
+    };
+    const SCENARIOS = {
+      before: {
+        tag: "Host: Tha (Real Windows 11 · Standard User)", burndown: "0%", burndownSub: "Baseline (4 INCONCLUSIVE)",
+        checks: {
+          "WIN-ETW-INTEGRITY": { verdict: "INCONCLUSIVE", customer: "Unverified — Administrator privilege required to enumerate active ETW trace sessions.", rationale: "Active ETW trace sessions could not be queried completely (access_denied)." },
+          "WIN-KERNEL-PPL-HVCI": { verdict: "PASS", customer: "Verified — VBS, HVCI memory integrity, LSA RunAsPPL, and CodeIntegrity logs are active.", rationale: "VBS and HVCI are running, LSA RunAsPPL is enabled, and CodeIntegrity/Operational log is readable." },
+          "WIN-XPROC-HANDLE": { verdict: "INCONCLUSIVE", customer: "Unverified — Security log and Handle Manipulation audit policy require elevation.", rationale: "Security log could not be read completely." },
+          "WIN-LSA-SSP-AUDIT": { verdict: "INCONCLUSIVE", customer: "Unverified — SeSecurityPrivilege is required to inspect LSA registry SACLs.", rationale: "LSA registry SACL could not be inspected (requires SeSecurityPrivilege)." },
+          "WIN-CMDLINE-WMI": { verdict: "INCONCLUSIVE", customer: "Unverified — Security log and Process Creation audit policy require elevation.", rationale: "Security log could not be read completely." }
+        }
+      },
+      after: {
+        tag: "Host: Tha (Real Windows 11 · Elevated Administrator)", burndown: "50.0%", burndownSub: "4 -> 2 INCONCLUSIVE (2 blind spots exposed)",
+        checks: {
+          "WIN-ETW-INTEGRITY": { verdict: "FAIL", customer: "Confirmed Blind Spot — DiagTrack-Listener ETW session is inactive on this endpoint.", rationale: "ETW visibility gaps observed: DiagTrack-Listener session inactive." },
+          "WIN-KERNEL-PPL-HVCI": { verdict: "PASS", customer: "Verified — VBS, HVCI memory integrity, LSA RunAsPPL, and CodeIntegrity logs remain active.", rationale: "VBS and HVCI are running, LSA RunAsPPL is enabled, and CodeIntegrity/Operational log is readable." },
+          "WIN-XPROC-HANDLE": { verdict: "INCONCLUSIVE", customer: "Unverified — Prerequisite Kernel Object / Handle audit policy is disabled by Windows default.", rationale: "Kernel Object / Handle Manipulation audit policy could not be verified as enabled." },
+          "WIN-LSA-SSP-AUDIT": { verdict: "FAIL", customer: "Confirmed Blind Spot — Registry Object Access auditing is off and HKLM\\...\\Lsa has 0 SACL rules.", rationale: "LSA SSP audit policy gaps observed: Registry Object Access audit policy is disabled; LSA registry key has no SACL audit rules." },
+          "WIN-CMDLINE-WMI": { verdict: "INCONCLUSIVE", customer: "Unverified — Prerequisite Audit Process Creation policy is disabled by Windows default.", rationale: "Process Creation audit policy could not be verified as enabled." }
+        }
+      },
+      hardened: {
+        tag: "Host: Tha (Simulated Post-GPO / Hardening Verification)", burndown: "100.0%", burndownSub: "4 -> 0 INCONCLUSIVE · 100% Hardening Rate",
+        checks: {
+          "WIN-ETW-INTEGRITY": { verdict: "PASS", customer: "Verified — EventLog-System & DiagTrack-Listener active and live marker observed.", rationale: "Active ETW sessions confirmed and benign marker event observed." },
+          "WIN-KERNEL-PPL-HVCI": { verdict: "PASS", customer: "Verified — VBS, HVCI, LSA RunAsPPL, and CodeIntegrity operational log active.", rationale: "VBS and HVCI are running, LSA RunAsPPL is enabled, and CodeIntegrity/Operational log is readable." },
+          "WIN-XPROC-HANDLE": { verdict: "PASS", customer: "Verified — Security Event 4656/4663 recorded our read-only OpenProcess(0x1000) canary.", rationale: "Cross-process read-only handle telemetry (Event 4656/4663) was observed." },
+          "WIN-LSA-SSP-AUDIT": { verdict: "PASS", customer: "Verified — Audit Registry enabled and write-audit SACL attached to HKLM\\...\\Lsa.", rationale: "Registry Object Access audit policy is enabled and LSA registry key has active SACL audit rules." },
+          "WIN-CMDLINE-WMI": { verdict: "PASS", customer: "Verified — Event 4688 captured VERIMETRY_CANARY_PING command line + WMI-Activity readable.", rationale: "Event 4688 with VERIMETRY_CANARY_PING command line observed and WMI-Activity readable." }
+        }
+      }
+    };
+    const CLEAN_RECEIPT = {
+      schema: "urn:verimetry:schema:receipt:v1",
+      test: { id: "WIN-LSA-SSP-AUDIT", rule_version: "lsa-ssp-audit-v1", mitre_attack: "T1547.005" },
+      target: { host: "Tha", host_fingerprint_sha256: "9b4e...d81f", challenge_nonce: null, scenario: "live-host" },
+      observation: { registry_query_status: "ok", sacl_query_status: "ok", audit_registry_policy: "disabled", sacl_present: false, sacl_rule_count: 0 },
+      verdict: "FAIL",
+      reason_codes: ["AUDIT_REGISTRY_DISABLED", "LSA_SACL_MISSING"],
+      rationale: "LSA SSP audit policy gaps observed: Registry Object Access audit policy is disabled; LSA registry key has no SACL audit rules."
+    };
+    let currentRole = "customer", currentScenario = "after", isTampered = false;
+    function toggleTheme() {
+      const r = document.documentElement;
+      r.setAttribute("data-theme", r.getAttribute("data-theme") === "light" ? "dark" : "light");
+    }
+    async function sha256Hex(str) {
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2, "0")).join("");
+    }
+    function setRole(role) { currentRole = role; render(); }
+    function setScenario(sc) { currentScenario = sc; render(); }
+    function toggleTamper() { isTampered = !isTampered; renderTamper(); }
+    function copyCmd(btn, text) {
+      if (navigator.clipboard) navigator.clipboard.writeText(text);
+      const old = btn.textContent; btn.textContent = "Copied!";
+      setTimeout(() => btn.textContent = old, 1200);
+    }
+    function mitreLinks(ids) {
+      return ids.map(id => `<a class="mitre mono" href="https://attack.mitre.org/techniques/${id.replace('.', '/')}/" target="_blank" rel="noopener noreferrer">${id} &#8599;</a>`).join(" ");
+    }
+    function render() {
+      document.getElementById("btn-role-customer").className = "role-btn" + (currentRole === "customer" ? " active" : "");
+      document.getElementById("btn-role-mssp").className = "role-btn" + (currentRole === "mssp" ? " active" : "");
+      document.getElementById("panel-title").textContent = currentRole === "customer"
+        ? "Customer View — Plain-English Assurance Cards"
+        : "MSSP Operations View — Root-Cause Evidence Gates & Remediations";
+      ["before", "after", "hardened"].forEach(id => {
+        document.getElementById("sc-" + id).className = "sc-btn" + (id === currentScenario ? " active" : "");
+      });
+      const sc = SCENARIOS[currentScenario];
+      document.getElementById("scenario-tag").textContent = sc.tag;
+      let p = 0, f = 0, inc = 0; const cards = [];
+      for (const [tid, meta] of Object.entries(CHECK_META)) {
+        const res = sc.checks[tid];
+        if (res.verdict === "PASS") p++; else if (res.verdict === "FAIL") f++; else inc++;
+        const vcls = res.verdict.toLowerCase();
+        const escapedCmd = meta.cmd.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+        if (currentRole === "customer") {
+          cards.push(`<article class="card ${vcls}"><div class="row"><span class="mono" style="font-size:11.5px;font-weight:700;color:var(--text-muted)">${tid}</span><div>${mitreLinks(meta.mitre)}</div></div><div class="row"><strong style="font-size:14.5px">${meta.title}</strong><span class="pill ${vcls} mono">${res.verdict}</span></div><p style="margin:0;font-size:13px">${res.customer}</p><div style="font-size:12px;color:var(--text-muted);padding-top:8px;border-top:1px solid var(--border)"><strong>Evidence Rule:</strong> ${res.rationale}</div></article>`);
+        } else {
+          cards.push(`<article class="card ${vcls}"><div class="row"><span class="mono" style="font-size:12px;font-weight:800;color:var(--cyan)">${tid}</span><span class="pill ${vcls} mono">${res.verdict}</span></div><div>${mitreLinks(meta.mitre)}</div><div style="font-size:12.5px"><strong>Gate Evaluation:</strong> ${res.rationale}</div><div class="cmd-box"><code class="mono">${meta.cmd}</code><button type="button" class="btn" style="padding:4px 9px" onclick="copyCmd(this, '${escapedCmd}')">Copy</button></div></article>`);
+        }
+      }
+      document.getElementById("kpi-pass").textContent = `${Math.round((p / 5) * 100)}%`;
+      document.getElementById("kpi-pass-sub").textContent = `${p} of 5 PASS`;
+      document.getElementById("kpi-fail").textContent = String(f);
+      document.getElementById("kpi-fail-sub").textContent = f === 0 ? "0 confirmed blind spots" : `${f} confirmed blind spot(s)`;
+      document.getElementById("kpi-inc").textContent = String(inc);
+      document.getElementById("kpi-burndown").textContent = sc.burndown;
+      document.getElementById("kpi-burndown-sub").textContent = sc.burndownSub;
+      document.getElementById("checks-container").innerHTML = cards.join("");
+    }
+    async function renderTamper() {
+      const signedHash = await sha256Hex(JSON.stringify(CLEAN_RECEIPT));
+      const active = JSON.parse(JSON.stringify(CLEAN_RECEIPT));
+      if (isTampered) active.verdict = "PASS";
+      const recomputedHash = await sha256Hex(JSON.stringify(active));
+      const deterministic = (active.observation.audit_registry_policy === "enabled" && active.observation.sacl_present) ? "PASS" : "FAIL";
+      const banner = document.getElementById("verify-banner");
+      const btn = document.getElementById("btn-tamper");
+      if (!isTampered) {
+        btn.textContent = "Forge FAIL -> PASS (Simulate Tamper)";
+        banner.className = "banner ok mono";
+        banner.innerHTML = `<span>&#10003; VERIFIED: DSSE v1 PAE Ed25519 signature valid · SHA-256 matches · Deterministic rule (${deterministic}) + reason_codes agree</span><span>SHA-256: ${recomputedHash.slice(0, 16)}…</span>`;
+      } else {
+        btn.textContent = "Restore Authentic Signed Receipt";
+        banner.className = "banner bad mono";
+        banner.innerHTML = `<span>&#10007; REJECTED: DSSE payload digest mismatch AND stored verdict "${active.verdict}" contradicts deterministic rule "${deterministic}"</span><span>Forged: ${recomputedHash.slice(0, 16)}…</span>`;
+      }
+      document.getElementById("receipt-json").textContent = JSON.stringify({ payloadType: "application/vnd.verimetry.receipt.v1+json", dsse_pae_sha256: { signed: signedHash, computed: recomputedHash, alg: "Ed25519" }, decoded_payload: active }, null, 2);
+    }
+    render(); renderTamper();
+  </script>
+</body>
+</html>

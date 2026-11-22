@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Verimetry — 7-Slide LinkedIn &amp; Instagram Carousel (1080x1350 PDF Export)</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: #05060a;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(16, 19, 28, 0.94);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid #232a3d;
+      padding: 14px 24px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .toolbar-title { font-weight: 800; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #f1f5f9; }
+    .toolbar-sub { font-size: 12px; color: #94a3b8; }
+    .btn {
+      cursor: pointer;
+      padding: 8px 15px;
+      border-radius: 8px;
+      font-size: 12.5px;
+      font-weight: 700;
+      border: 1px solid #323c56;
+      background: #181d2c;
+      color: #f1f5f9;
+      text-decoration: none;
+    }
+    .btn-primary { background: #6366f1; border-color: #6366f1; color: #ffffff; }
+    .deck {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 36px;
+      padding: 36px 20px 80px;
+    }
+    .slide {
+      width: 1080px;
+      height: 1350px;
+      max-width: 100%;
+      background: #090a0f;
+      border: 1px solid #232a3d;
+      border-radius: 18px;
+      padding: 72px 76px;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      overflow: hidden;
+      box-shadow: 0 24px 70px rgba(0, 0, 0, 0.65);
+    }
+    .slide-top { display: flex; justify-content: space-between; align-items: center; font-size: 18px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #38bdf8; }
+    .slide-num { color: #64748b; }
+    .slide h1 { margin: 0; font-size: 62px; line-height: 1.08; letter-spacing: -0.03em; font-weight: 800; }
+    .slide h2 { margin: 0; font-size: 52px; line-height: 1.12; letter-spacing: -0.025em; font-weight: 800; }
+    .lead { font-size: 27px; line-height: 1.45; color: #94a3b8; margin: 0; }
+    .em-green { color: #10b981; }
+    .em-red { color: #f43f5e; }
+    .em-amber { color: #f59e0b; }
+    .em-cyan { color: #38bdf8; }
+    .hero-img-wrap { display: flex; justify-content: center; margin: 12px 0; }
+    .hero-img { width: 470px; height: 470px; object-fit: cover; border-radius: 22px; border: 1px solid #232a3d; }
+    .card-stack { display: flex; flex-direction: column; gap: 22px; }
+    .card { background: #121621; border: 1px solid #232a3d; border-radius: 18px; padding: 30px 34px; }
+    .card-green { border-left: 8px solid #10b981; }
+    .card-red { border-left: 8px solid #f43f5e; }
+    .card-amber { border-left: 8px solid #f59e0b; }
+    .card-cyan { border-left: 8px solid #38bdf8; }
+    .card-title { font-size: 26px; font-weight: 800; margin: 0 0 10px; }
+    .card-body { font-size: 23px; line-height: 1.42; color: #cbd5e1; margin: 0; }
+    .stat-row { display: grid; grid-template-columns: 1fr; gap: 22px; }
+    .stat-card { background: #121621; border: 1px solid #232a3d; border-radius: 18px; padding: 32px 36px; display: flex; align-items: center; justify-content: space-between; gap: 28px; }
+    .stat-big { font-size: 62px; font-weight: 900; line-height: 1; white-space: nowrap; }
+    .stat-desc { font-size: 22px; line-height: 1.4; color: #cbd5e1; }
+    .stat-src { font-size: 16px; color: #64748b; margin-top: 6px; display: block; }
+    .pill { display: inline-block; padding: 8px 18px; border-radius: 999px; font-size: 20px; font-weight: 800; letter-spacing: 0.05em; }
+    .pill-pass { background: rgba(16,185,129,0.14); color: #10b981; border: 2px solid rgba(16,185,129,0.5); }
+    .pill-fail { background: rgba(244,63,94,0.14); color: #f43f5e; border: 2px solid rgba(244,63,94,0.5); }
+    .pill-inc { background: rgba(245,158,11,0.14); color: #f59e0b; border: 2px solid rgba(245,158,11,0.5); }
+    .term { background: #0b0e16; border: 1px solid #323c56; border-radius: 16px; padding: 28px 32px; font-size: 21px; line-height: 1.6; color: #e2e8f0; }
+    .cta-box { background: linear-gradient(135deg, rgba(99,102,241,0.22), rgba(56,189,248,0.14)); border: 2px solid #6366f1; border-radius: 22px; padding: 40px; text-align: center; }
+    .keyword { display: inline-block; margin-top: 16px; padding: 14px 40px; border-radius: 14px; background: #6366f1; color: #ffffff; font-size: 46px; font-weight: 900; letter-spacing: 0.12em; }
+    .slide-foot { display: flex; justify-content: space-between; align-items: center; padding-top: 24px; border-top: 1px solid #232a3d; font-size: 18px; color: #64748b; }
+
+    @media print {
+      @page { size: 1080px 1350px; margin: 0; }
+      body { background: #090a0f !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .toolbar { display: none !important; }
+      .deck { padding: 0; gap: 0; }
+      .slide { border: none; border-radius: 0; box-shadow: none; break-after: page; page-break-after: always; }
+      .slide:last-child { break-after: auto; page-break-after: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="toolbar">
+    <div>
+      <div class="toolbar-title">Verimetry · 7-Slide LinkedIn / Instagram Carousel (1080&times;1350px)</div>
+      <div class="toolbar-sub">Zero fabricated numbers · Click "Save 7-Slide LinkedIn PDF" (Destination: Save as PDF, Margins: None, Background Graphics: ON)</div>
+    </div>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <button class="btn btn-primary" type="button" onclick="window.print()">Save 7-Slide LinkedIn PDF</button>
+      <a class="btn" href="./sandbox.html">Open Test Now Sandbox</a>
+    </div>
+  </div>
+
+  <div class="deck">
+    <!-- SLIDE 1 -->
+    <section class="slide">
+      <div class="slide-top"><span>VERIMETRY</span><span class="slide-num mono">01 / 07</span></div>
+      <div style="display:flex;flex-direction:column;gap:28px">
+        <h1>Your Security Dashboard Says <span class="em-green">100% Covered</span>.<br>Half of Breached Teams Still Find Out From Someone Else.</h1>
+        <div class="hero-img-wrap"><img class="hero-img" src="./assets/carousel_slide1_cover.jpg" alt="Fractured green shield" /></div>
+        <p class="lead">According to <strong style="color:#f1f5f9">Mandiant M-Trends 2026</strong>, organizations detect intrusions internally only <strong class="em-cyan">52%</strong> of the time (<strong class="em-red">48%</strong> are notified externally). Here is the silent Windows telemetry bug nobody tests.</p>
+      </div>
+      <div class="slide-foot"><span>Swipe to see what default Windows drops &rarr;</span><span class="mono">Evidence Before Assurance</span></div>
+    </section>
+
+    <!-- SLIDE 2 -->
+    <section class="slide">
+      <div class="slide-top"><span>THE SILENT WINDOWS GAP</span><span class="slide-num mono">02 / 07</span></div>
+      <div style="display:flex;flex-direction:column;gap:34px">
+        <h2>&ldquo;Agent Installed&rdquo; <span class="em-red">&ne;</span> &ldquo;Logs Arrived.&rdquo;</h2>
+        <p class="lead">On standard Windows builds, critical forensic telemetry is <strong style="color:#f1f5f9">off by default</strong>:</p>
+        <div class="card-stack">
+          <div class="card card-red">
+            <div class="card-title">1. Event ID 4688 Command Lines</div>
+            <p class="card-body">Requires <strong>two separate policy toggles</strong>: <code class="mono em-cyan">Audit Process Creation</code> AND <code class="mono em-cyan">ProcessCreationIncludeCmdLine_Enabled = 1</code>. Miss one and PowerShell/WMI arguments disappear.</p>
+          </div>
+          <div class="card card-red">
+            <div class="card-title">2. LSA Registry SACLs &amp; Cross-Process Handles</div>
+            <p class="card-body">Auditing on <code class="mono em-cyan">HKLM\...\Control\Lsa</code> (MITRE <code class="mono">T1547.005</code>) and Events <code class="mono">4656 / 4663</code> are disabled out of the box.</p>
+          </div>
+          <div class="card card-amber">
+            <div class="card-title">3. Silent 90-Minute GPO Drift</div>
+            <p class="card-body">Domain Group Policy refreshes every <strong>90 minutes</strong>—silently overwriting local hardening without crashing a single endpoint agent.</p>
+          </div>
+        </div>
+      </div>
+      <div class="slide-foot"><span>Documented Microsoft Windows Internals defaults</span><span class="mono">02 / 07</span></div>
+    </section>
+
+    <!-- SLIDE 3 -->
+    <section class="slide">
+      <div class="slide-top"><span>THE SPEED GAP</span><span class="slide-num mono">03 / 07</span></div>
+      <div style="display:flex;flex-direction:column;gap:34px">
+        <h2>Attackers Move in Seconds.<br>Breach Lifecycles Last Months.</h2>
+        <p class="lead">There is zero time mid-incident to discover your audit policies were never recording:</p>
+        <div class="stat-row">
+          <div class="stat-card">
+            <div class="stat-big mono em-red">22s</div>
+            <div class="stat-desc">Median time from initial access to secondary threat-group hand-off (down from 8+ hours in 2022).<span class="stat-src">Source: Mandiant M-Trends 2026</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-big mono em-amber">&lt; 1 hr</div>
+            <div class="stat-desc"><strong>22%</strong> of incident response engagements reach data exfiltration in under one hour (fastest 25% in 72 minutes).<span class="stat-src">Source: Palo Alto Unit 42 Global IR Report 2026</span></div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-big mono em-cyan">247d</div>
+            <div class="stat-desc">Global average time to identify and contain a breach, at <strong>$4.99M</strong> global average cost (<strong>$11.5M</strong> U.S.).<span class="stat-src">Source: IBM Cost of a Data Breach Report 2026</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="slide-foot"><span>100% verified 2026 incident response benchmarks</span><span class="mono">03 / 07</span></div>
+    </section>
+
+    <!-- SLIDE 4 -->
+    <section class="slide">
+      <div class="slide-top"><span>THREE-VALUED EVIDENCE GATES</span><span class="slide-num mono">04 / 07</span></div>
+      <div style="display:flex;flex-direction:column;gap:30px">
+        <h2>Stop Forcing Binary <code class="mono">PASS / FAIL</code> When You&rsquo;re Blind.</h2>
+        <p class="lead">When a collector hits <code class="mono">AccessDenied</code> or a truncated log, binary dashboards guess. <strong>Verimetry</strong> enforces strict three-valued logic:</p>
+        <div class="card-stack">
+          <div class="card card-green">
+            <div style="margin-bottom:12px"><span class="pill pill-pass mono">PASS</span></div>
+            <p class="card-body">All prerequisites confirmed AND our harmless native Windows canary event actually arrived in the log inside the bounded window.</p>
+          </div>
+          <div class="card card-red">
+            <div style="margin-bottom:12px"><span class="pill pill-fail mono">FAIL</span></div>
+            <p class="card-body">All prerequisites confirmed, yet expected telemetry or protection was absent—a real, verified blind spot.</p>
+          </div>
+          <div class="card card-amber">
+            <div style="margin-bottom:12px"><span class="pill pill-inc mono">INCONCLUSIVE</span></div>
+            <p class="card-body">Missing privilege (<code class="mono">SeSecurityPrivilege</code>), truncated log (<code class="mono">&ge; 2000</code>), or unconfigured audit policy. <strong>Never guesses. Never fabricates.</strong></p>
+          </div>
+        </div>
+      </div>
+      <div class="slide-foot"><span>Deterministic Python rules · Zero AI guesswork</span><span class="mono">04 / 07</span></div>
+    </section>
+
+    <!-- SLIDE 5 -->
+    <section class="slide">
+      <div class="slide-top"><span>REAL WINDOWS 11 PROOF (HOST: THA)</span><span class="slide-num mono">05 / 07</span></div>
+      <div style="display:flex;flex-direction:column;gap:30px">
+        <h2>What Happened on a Real Windows 11 Laptop (<code class="mono em-cyan">Tha</code>).</h2>
+        <div class="card card-amber">
+          <div class="card-title mono">Run 1 · Standard User (.\evidence)</div>
+          <p class="card-body"><strong class="em-green">1/5 PASS (20%)</strong> — Confirmed VBS / HVCI &amp; LSA RunAsPPL.<br><strong class="em-amber">4/5 INCONCLUSIVE</strong> · <strong style="color:#f1f5f9">0 false failures</strong>. Verimetry refused to guess without Admin privilege.</p>
+        </div>
+        <div class="card card-cyan">
+          <div class="card-title mono">Run 2 · Elevated Admin (.\evidence-elevated)</div>
+          <p class="card-body"><strong class="em-cyan">50% INCONCLUSIVE Burn-Down (4 &rarr; 2)</strong> via <code class="mono">verimetry compare</code>.<br>Exposed <strong class="em-red">2 real hidden blind spots</strong>:</p>
+          <ul style="font-size:22px;line-height:1.5;color:#f1f5f9;margin:14px 0 0 24px">
+            <li><code class="mono em-red">WIN-ETW-INTEGRITY</code> (<code class="mono">T1562.006</code>): <code class="mono">DiagTrack-Listener</code> ETW session inactive.</li>
+            <li><code class="mono em-red">WIN-LSA-SSP-AUDIT</code> (<code class="mono">T1547.005</code>): Audit Registry disabled &amp; 0 LSA SACL rules.</li>
+          </ul>
+        </div>
+        <p class="lead" style="font-size:23px">Remaining 2 checks (<code class="mono">4688 CmdLine</code> &amp; <code class="mono">XProc Handle</code>) stayed honestly gated as <strong class="em-amber">INCONCLUSIVE</strong> until policy prerequisites are turned on.</p>
+      </div>
+      <div class="slide-foot"><span>Verified via verimetry compare --before --after</span><span class="mono">05 / 07</span></div>
+    </section>
+
+    <!-- SLIDE 6 -->
+    <section class="slide">
+      <div class="slide-top"><span>THE MOAT · CRYPTOGRAPHIC PROOF</span><span class="slide-num mono">06 / 07</span></div>
+      <div style="display:flex;flex-direction:column;gap:28px">
+        <h2>Screenshots Can Be Faked.<br><span class="em-cyan">Math Can&rsquo;t.</span></h2>
+        <p class="lead"><strong style="color:#f1f5f9">0</strong> kernel drivers · <strong style="color:#f1f5f9">0</strong> background daemons · <strong style="color:#f1f5f9">0</strong> cloud calls. Every result is canonical JSON hashed with <code class="mono">SHA-256</code> and signed with <code class="mono">Ed25519</code>.</p>
+        <div class="hero-img-wrap"><img class="hero-img" style="width:390px;height:390px" src="./assets/scene5_3d_tamper_seal.jpg" alt="Shattering cryptographic wax seal" /></div>
+        <div class="term mono">
+          <div style="color:#94a3b8"># Forge one FAIL into PASS before an audit, then verify offline:</div>
+          <div>&gt; python -m verimetry verify --receipt forged.json --public signer.pub.pem</div>
+          <div class="em-red" style="font-weight:800;margin-top:8px">REJECTED: Receipt digest mismatch</div>
+        </div>
+      </div>
+      <div class="slide-foot"><span>Envelope: DSSE v1 (Ed25519 PAE) · Offline verifiable</span><span class="mono">06 / 07</span></div>
+    </section>
+
+    <!-- SLIDE 7 -->
+    <section class="slide">
+      <div class="slide-top"><span>PRESS THE TEST BUTTON</span><span class="slide-num mono">07 / 07</span></div>
+      <div style="display:flex;flex-direction:column;gap:32px">
+        <h1>Stop Assuming Your Logs Exist.<br><span class="em-green">Prove It Offline.</span></h1>
+        <div class="card-stack">
+          <div class="card card-green">
+            <p class="card-body"><strong>5 live Windows Internals canaries</strong> + <strong>7 hardened T1685 defense-impairment scenarios</strong> + <strong>63/63 passing tests</strong> + one-click <strong>Customer View &harr; MSSP Operations View</strong> reports.</p>
+          </div>
+        </div>
+        <div class="cta-box">
+          <div style="font-size:28px;font-weight:700;color:#e2e8f0">Comment this keyword below and I&rsquo;ll send you the Apache-2.0 GitHub repo, 30-second interactive sandbox &amp; signed DSSE sample report:</div>
+          <div class="keyword mono">RECEIPT</div>
+        </div>
+      </div>
+      <div class="slide-foot"><span>Verimetry · Apache-2.0 Open Source · Zero Dependencies Beyond cryptography</span><span class="mono">07 / 07</span></div>
+    </section>
+  </div>
+</body>
+</html>
