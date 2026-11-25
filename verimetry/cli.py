@@ -244,6 +244,8 @@ def main(argv=None):
     )
     k = sub.add_parser("keygen", help="Generate one Ed25519 private/public key pair")
     k.add_argument("--private", required=True)
+    g = sub.add_parser("gui", help="Launch zero-dependency native Tkinter GUI for the guided 3-step live test")
+    g.add_argument("--workdir", help="Working directory for evidence folders and signing keys (default: current directory)")
     v = sub.add_parser("verify", help="Verify DSSE receipt against independently trusted public key")
     v.add_argument("--receipt", required=True)
     v.add_argument("--public", required=True)
@@ -282,6 +284,9 @@ def main(argv=None):
         print(f"Plain-English report: {friendly.resolve()}")
     elif args.command == "keygen":
         print(f"Public key: {init_keys(Path(args.private))}")
+    elif args.command == "gui":
+        from .gui import launch_gui
+        raise SystemExit(launch_gui(workdir=args.workdir))
     else:
         try:
             package = load_json_strict(args.receipt)

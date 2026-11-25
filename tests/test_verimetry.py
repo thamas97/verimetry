@@ -1022,5 +1022,192 @@ def test_piece2_review_hardening_t1685_and_win32_null_guard():
     assert v == "PASS" and "USN_AND_EVTX_CONTINUITY_VERIFIED" in codes
 
 
+def test_gui_headless_import_and_privilege_helpers(monkeypatch, capsys):
+    """GUI module must import cleanly without tkinter and detect privilege / UAC safely."""
+    import subprocess
+    import sys
+    from verimetry import gui
+
+    # 1. Simulate Python runtime missing tkinter entirely via isolated subprocess import blocker
+    blocker = (
+        "import sys\n"
+        "class _BlockTk:\n"
+        "    def find_spec(self, name, path, target=None):\n"
+        "        if name == 'tkinter' or name.startswith('tkinter.'):\n"
+        "            raise ModuleNotFoundError('No module named tkinter')\n"
+        "sys.meta_path.insert(0, _BlockTk())\n"
+        "import verimetry.gui as g\n"
+        "assert g.is_tkinter_available() is False\n"
+        "assert g.launch_gui() == 1\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", blocker], capture_output=True, text=True, check=False)
+    assert proc.returncode == 0, f"Headless import check failed: {proc.stderr}"
+    assert "tkinter" in proc.stderr.lower()
+
+    # 2. Headless launch_gui() when _TK_AVAILABLE is False returns exit code 1 cleanly
+    monkeypatch.setattr(gui, "_TK_AVAILABLE", False)
+    assert gui.launch_gui() == 1
+    assert "tkinter" in capsys.readouterr().err.lower()
+
+    # 3. Privilege context detection (Demo Mode, Standard User, Administrator)
+    monkeypatch.setattr(gui.platform, "system", lambda: "Linux")
+    ctx_demo = gui.get_privilege_context()
+    assert ctx_demo["mode"] == "demo" and not ctx_demo["is_windows"]
+
+    monkeypatch.setattr(gui.platform, "system", lambda: "Windows")
+    fake_windll = SimpleNamespace(shell32=SimpleNamespace(IsUserAnAdmin=lambda: 0))
+    monkeypatch.setattr(gui.ctypes, "windll", fake_windll, raising=False)
+    ctx_std = gui.get_privilege_context()
+    assert ctx_std["mode"] == "standard" and "Standard User" in ctx_std["badge_text"]
+
+    fake_windll_admin = SimpleNamespace(shell32=SimpleNamespace(IsUserAnAdmin=lambda: 1))
+    monkeypatch.setattr(gui.ctypes, "windll", fake_windll_admin, raising=False)
+    ctx_adm = gui.get_privilege_context()
+    assert ctx_adm["mode"] == "elevated" and "Administrator" in ctx_adm["badge_text"]
+
+    # 4. Windows UAC ShellExecuteW('runas', sys.executable, '-m verimetry gui', None, 1)
+    uac_calls = []
+    def _fake_shell_exec(hwnd, verb, exe, params, directory, show):
+        uac_calls.append((hwnd, verb, exe, params, directory, show))
+        return 42
+
+    monkeypatch.setattr(
+        gui.ctypes,
+        "windll",
+        SimpleNamespace(shell32=SimpleNamespace(ShellExecuteW=_fake_shell_exec)),
+        raising=False,
+    )
+    ok_uac, _msg = gui.relaunch_as_admin()
+    assert ok_uac
+    assert uac_calls == [(None, "runas", sys.executable, "-m verimetry gui", None, 1)]
+
+
+def test_gui_tamper_trap_flips_payload_byte_and_rejects(tmp_path):
+    """Tamper Trap copies receipt to forged.json, flips 1 payload byte, and fails closed REJECTED."""
+    from verimetry import gui
+
+    priv = tmp_path / "verimetry-key.pem"
+    pub = init_keys(priv)
+    receipt = make_receipt("LAB-HOST", internals_observation("WIN-ETW-INTEGRITY", "PASS"), "synthetic", test_id="WIN-ETW-INTEGRITY")
+    signed = sign(receipt, priv)
+    rec_path = tmp_path / "receipt-etw-integrity.json"
+    original_text = json.dumps(signed, indent=2) + "\n"
+    rec_path.write_text(original_text, encoding="utf-8")
+
+    # Baseline verify must succeed
+    ok_res = gui.run_verify_receipt(rec_path, pub)
+    assert ok_res["ok"] and ok_res["status"] == "VERIFIED"
+
+    # Tamper trap flips 1 decoded byte in forged.json and verifies fail-closed REJECTED
+    forged_path = tmp_path / "forged.json"
+    tamper_res = gui.run_tamper_trap(rec_path, pub, forged_path=forged_path)
+    assert forged_path.exists()
+    assert rec_path.read_text(encoding="utf-8") == original_text
+    assert tamper_res["verified"] is False
+    assert tamper_res["status"] == "REJECTED"
+    assert "InvalidSignature" in tamper_res["message"]
+    assert tamper_res["forged_byte"] == (tamper_res["original_byte"] ^ 0x01)
+
+    orig_bytes = base64.b64decode(signed["payload"], validate=True)
+    forged_env = json.loads(forged_path.read_text(encoding="utf-8"))
+    forged_bytes = base64.b64decode(forged_env["payload"], validate=True)
+    diffs = [i for i, (a, b) in enumerate(zip(orig_bytes, forged_bytes)) if a != b]
+    assert diffs == [tamper_res["flipped_byte_offset"]]
+
+
+def test_gui_issue_summary_strips_hostnames_and_private_keys(monkeypatch):
+    """Anonymized Issue #1 summary must format 5 lines and strip hostnames and PEM private keys."""
+    from verimetry import gui
+
+    secret_host = "CORP-FINANCE-LAPTOP-99"
+    monkeypatch.setattr(gui.platform, "node", lambda: secret_host)
+    monkeypatch.setenv("COMPUTERNAME", secret_host)
+
+    baseline = [
+        {"test_id": "WIN-KERNEL-PPL-HVCI", "verdict": "PASS", "reason_codes": [], "target_host": secret_host},
+        {"test_id": "WIN-ETW-INTEGRITY", "verdict": "INCONCLUSIVE", "reason_codes": ["ETW_QUERY_ACCESS_DENIED"], "target_host": secret_host},
+        {"test_id": "WIN-LSA-SSP-AUDIT", "verdict": "INCONCLUSIVE", "reason_codes": ["LSA_SACL_ACCESS_DENIED"], "target_host": secret_host},
+    ]
+    elevated = [
+        {"test_id": "WIN-KERNEL-PPL-HVCI", "verdict": "PASS", "reason_codes": [], "target_host": secret_host},
+        {"test_id": "WIN-ETW-INTEGRITY", "verdict": "FAIL", "reason_codes": ["DIAGTRACK_ETW_INACTIVE"], "target_host": secret_host},
+        {"test_id": "WIN-LSA-SSP-AUDIT", "verdict": "FAIL", "reason_codes": ["LSA_SACL_MISSING"], "target_host": secret_host},
+    ]
+
+    summary = gui.format_issue_summary(
+        baseline_checks=baseline,
+        elevated_checks=elevated,
+        environment="Hyper-V Lab VM",
+        edr=f"Defender on {secret_host}",
+        os_build_locale="Windows 11 24H2 (Build 26100), `de-DE`",
+    )
+    lines = summary.splitlines()
+    assert len(lines) == 5
+    assert "Windows 11 24H2" in summary and "`de-DE`" in summary
+    assert "`1` PASS / `0` FAIL / `2` INCONCLUSIVE" in summary
+    assert "`1` PASS / `2` FAIL / `0` INCONCLUSIVE" in summary
+    assert "WIN-ETW-INTEGRITY" in summary and "DIAGTRACK_ETW_INACTIVE" in summary
+    assert secret_host not in summary
+    assert secret_host.lower() not in summary.lower()
+
+    # Private key material must never survive sanitization
+    leaked = f"Host={secret_host}\n-----BEGIN PRIVATE KEY-----\nSECRET_KEY_BYTES\n-----END PRIVATE KEY-----\n"
+    redacted = gui.sanitize_public_text(leaked)
+    assert secret_host not in redacted
+    assert "SECRET_KEY_BYTES" not in redacted
+    assert "[REDACTED-PRIVATE-KEY]" in redacted
+
+
+def test_gui_step1_step2_different_admin_sid_fallback_and_cleanup(tmp_path, monkeypatch):
+    """Step 2 must handle PermissionError on shared verimetry-key.pem gracefully via per-folder keys."""
+    from verimetry import gui
+
+    # Keep an unrelated file to verify cleanup never deletes non-Verimetry files
+    unrelated = tmp_path / "keep-me.txt"
+    unrelated.write_text("do not delete", encoding="utf-8")
+
+    # Step 1 baseline in demo mode
+    s1 = gui.run_step1_baseline(tmp_path, live=False)
+    assert (tmp_path / "verimetry-key.pem").exists()
+    assert (tmp_path / "verimetry-key.pub.pem").exists()
+    assert len(s1["checks"]) == 5
+
+    # Simulate different Windows Admin SID hitting PermissionError on standard user's verimetry-key.pem
+    shared_priv = (tmp_path / "verimetry-key.pem").resolve()
+    orig_read_bytes = Path.read_bytes
+
+    def _deny_shared_priv(self):
+        if self.resolve() == shared_priv:
+            raise PermissionError("Access is denied (simulated different Windows Admin SID ACL)")
+        return orig_read_bytes(self)
+
+    monkeypatch.setattr(Path, "read_bytes", _deny_shared_priv)
+
+    s2 = gui.run_step2_elevated_and_compare(tmp_path, live=False)
+    assert s2["used_key_fallback"] is True
+    assert "signer.pem" in s2["fallback_note"]
+    assert s2["comparison_receipt_path"] and Path(s2["comparison_receipt_path"]).exists()
+    assert s2["comparison_report_path"] and Path(s2["comparison_report_path"]).exists()
+
+    # Comparison receipt must verify offline with its fallback public key
+    ver = gui.run_verify_receipt(s2["comparison_receipt_path"], s2["comparison_pub_path"])
+    assert ver["ok"], ver["message"]
+
+    # Create forged.json and confirm cleanup removes only Verimetry artifacts
+    gui.run_tamper_trap(s2["comparison_receipt_path"], s2["comparison_pub_path"], forged_path=tmp_path / "forged.json")
+    assert (tmp_path / "forged.json").exists()
+
+    cleaned = gui.cleanup_local_evidence(tmp_path)
+    assert not cleaned["errors"]
+    assert "evidence" in cleaned["deleted"]
+    assert "evidence-elevated" in cleaned["deleted"]
+    assert "evidence-comparison" in cleaned["deleted"]
+    assert "verimetry-key.pem" in cleaned["deleted"]
+    assert "verimetry-key.pub.pem" in cleaned["deleted"]
+    assert "forged.json" in cleaned["deleted"]
+    assert unrelated.exists() and unrelated.read_text(encoding="utf-8") == "do not delete"
+
+
+
 
 

@@ -12,6 +12,7 @@ dependencies = ["cryptography>=42,<48"]
 dev = ["pytest>=8"]
 [project.scripts]
 verimetry = "verimetry.cli:main"
+verimetry-gui = "verimetry.gui:main"
 [tool.setuptools.packages.find]
 include = ["verimetry*"]
 [tool.pytest.ini_options]

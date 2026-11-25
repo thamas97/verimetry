@@ -1,6 +1,6 @@
 # Verimetry — Evidence Before Assurance
 
-![Tests](https://img.shields.io/badge/tests-65%20passing-10b981?style=flat-square)
+![Tests](https://img.shields.io/badge/tests-69%20passing-10b981?style=flat-square)
 ![Python](https://img.shields.io/badge/python-3.11%2B-38bdf8?style=flat-square)
 ![Runtime Dependencies](https://img.shields.io/badge/runtime%20deps-1%20(cryptography)-6366f1?style=flat-square)
 ![Drivers](https://img.shields.io/badge/kernel%20drivers-0-10b981?style=flat-square)
@@ -21,7 +21,7 @@ Open [`docs/sandbox.html`](./docs/sandbox.html) (or GitHub Pages) to replay real
 ### Option 2: Verify the Pre-Built DSSE v1 Sample Receipt & Golden Test Vectors Offline
 ```bash
 python3 -m pip install -e ".[dev]"
-pytest -q                                              # 65/65 tests passing (incl. test_vectors/)
+pytest -q                                              # 69/69 tests passing (incl. test_vectors/)
 python3 -m verimetry verify \
   --receipt ./docs/sample-pack/sample-comparison-receipt.json \
   --public ./docs/sample-pack/sample-signer.pub.pem \
@@ -37,6 +37,8 @@ Run inside a disposable test VM or a Windows 10/11 / Server host you are authori
 
 - **Step 1 (Standard user, zero risk):** Generate a local Ed25519 keypair (`keygen --private`) and run `verimetry assess` non-elevated to verify privilege-gated checks cleanly output `INCONCLUSIVE` instead of fabricating `FAIL`s or crashing.
 - **Step 2 (Elevated on a test VM or lab host):** Run `verimetry assess` as Administrator, then run `verimetry compare` against Step 1 (and `verimetry verify`) to watch `INCONCLUSIVE` burn down and real host telemetry gaps surface—backed by an offline-verifiable DSSE v1 receipt (and dual-persona HTML report at `.\evidence-comparison\comparison-report.html`).
+
+> **Prefer a 1-click desktop UI?** Run **`python -m verimetry gui`** (zero extra dependencies—Python stdlib `tkinter`) for the guided 3-step live test, UAC elevation relaunch, Tamper Trap, and anonymized Issue #1 summary copy. See [`docs/live-test-guide.md`](./docs/live-test-guide.md) for the side-by-side GUI + CLI walkthrough.
 
 ```powershell
 # Step 1 (Standard user, zero risk — observe honest INCONCLUSIVE gates):
