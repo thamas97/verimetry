@@ -29,24 +29,27 @@ python3 -m verimetry verify \
 ```
 Building a Go, Rust, or TypeScript verifier? See the 8 golden pass/fail DSSE conformance vectors in [`test_vectors/`](./test_vectors/README.md).
 
-### Option 3: Run Live on Windows 10/11 (PowerShell)
-Run inside a disposable test VM or a Windows host you are authorized to assess:
+---
+
+## 2-Minute Live Windows Test (Non-Elevated → Elevated Delta)
+
+Run inside a disposable test VM or a Windows 10/11 / Server host you are authorized to assess (after one-time setup: `py -3 -m venv .venv; .\.venv\Scripts\Activate.ps1; python -m pip install -e .`):
+
+- **Step 1 (Standard user, zero risk):** Generate a local Ed25519 keypair (`keygen --private`) and run `verimetry assess` non-elevated to verify privilege-gated checks cleanly output `INCONCLUSIVE` instead of fabricating `FAIL`s or crashing.
+- **Step 2 (Elevated on a test VM or lab host):** Run `verimetry assess` as Administrator, then run `verimetry compare` against Step 1 (and `verimetry verify`) to watch `INCONCLUSIVE` burn down and real host telemetry gaps surface—backed by an offline-verifiable DSSE v1 receipt (and dual-persona HTML report at `.\evidence-comparison\comparison-report.html`).
+
 ```powershell
-py -3 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
-pytest -q
+# Step 1 (Standard user, zero risk — observe honest INCONCLUSIVE gates):
+python -m verimetry keygen --private .\verimetry-key.pem
+python -m verimetry assess --out .\evidence --key .\verimetry-key.pem
 
-# 1. Baseline non-elevated run (observe honest INCONCLUSIVE gates):
-python -m verimetry assess --out .\evidence
-
-# 2. Re-run from an elevated Administrator PowerShell:
-python -m verimetry assess --out .\evidence-elevated
-
-# 3. Cryptographically compare both runs & open the dual-persona report:
-python -m verimetry compare --before .\evidence --after .\evidence-elevated --out .\evidence-comparison
-start .\evidence-comparison\comparison-report.html
+# Step 2 (Elevated Administrator PowerShell on a test VM or lab host):
+python -m verimetry assess --out .\evidence-elevated --key .\verimetry-key.pem
+python -m verimetry compare --before .\evidence --after .\evidence-elevated --out .\evidence-comparison --key .\verimetry-key.pem --public .\verimetry-key.pub.pem
+python -m verimetry verify --receipt .\evidence-comparison\comparison-receipt.json --public .\verimetry-key.pub.pem --show
 ```
+
+> **Safety & privacy guarantee:** Verimetry is strictly read-only, installs `0` kernel drivers or daemons, makes `0` host mutations, and one-way hashes local host identifiers into `host_fingerprint_sha256`. Hit an edge case on a localized OS, third-party EDR, or nested VM? Share your verdict counts in the [pinned `v1.0.0` Live Fleet Test issue](https://github.com/thamas97/verimetry/issues/1).
 
 ---
 

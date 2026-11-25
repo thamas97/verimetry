@@ -292,3 +292,20 @@ jobs:
    * Don't send a deck. Send a 3-line DM + link to the `Test Now` sandbox + 1 sentence tailored to their exact engine (*e.g.*, Asymptote's *Beacon*, Crash Override's *Chalk*, Bitbison's *SUNSPOT* provenance graph, Longwave's *MSP Rust agent*, Tracecat's Python SOAR workflows).
 5. **MSSP / Cyber-Insurance "Leave-Behind Sample Pack":**
    * Bundle 3 files into a downloadable zip on your repo Releases page: `sample-comparison-report.html`, `sample-comparison-receipt.json`, and `sample-signer.pub.pem` — letting any MSSP owner or broker run `verimetry verify` offline on your sample proof in 10 seconds.
+
+---
+
+## 8. Practitioner Callout — Try to Break It (r/blueteamsec / X / LinkedIn)
+
+> **Try to break this on your Windows lab VM:**
+>
+> Most security checks are binary (`PASS`/`FAIL`), which means missing privileges or a blinded ETW session quietly turn into a false green or a noisy false failure.
+>
+> I just released **Verimetry v1.0.0** (Apache-2.0, zero drivers, read-only, single dependency `cryptography`)—a local-first Windows Internals telemetry verifier built on strict three-valued logic (`PASS` / `FAIL` / `INCONCLUSIVE`), `advapi32!AuditQuerySystemPolicy` (no English-only `auditpol` parsing), and DSSE v1 Ed25519 receipts.
+>
+> **I want to stress-test it against real Windows quirks** (non-English locales, third-party EDRs, nested VMs, Server 2022/2025):
+> 1. Run it non-elevated first → verify it gates to `INCONCLUSIVE` instead of faking `FAIL`.
+> 2. Run it elevated on a test VM → run `verimetry compare` to see what real gaps it surfaces.
+> 3. Drop your verdict counts or whatever broke in the pinned GitHub issue: https://github.com/thamas97/verimetry/issues/1
+>
+> Repo & `v1.0.0` release: https://github.com/thamas97/verimetry
